@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mondayunited States</title>
+<meta name="description" content="Game social deduction satir birokrasi. 6–12 pemain.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: {
+      ink: { DEFAULT:'#09090b', 900:'#0c0c10', 800:'#131318', 700:'#1c1c24' },
+      korup: { DEFAULT:'#ff2e4d', soft:'#ff2e4d1a' },
+      reform:{ DEFAULT:'#22e39a', soft:'#22e39a1a' },
+      istana:{ DEFAULT:'#f5c542', soft:'#f5c5421a' },
+      berita:'#ffd400', kertas:'#ece7dc'
+    },
+    fontFamily: { display:['Anton','Impact','sans-serif'], sans:['"Space Grotesk"','system-ui','sans-serif'], mono:['"JetBrains Mono"','monospace'] },
+    boxShadow: {
+      'neon-korup':'0 0 0 1px #ff2e4d55, 0 0 24px -4px #ff2e4d88',
+      'neon-reform':'0 0 0 1px #22e39a55, 0 0 24px -4px #22e39a88',
+      'neon-istana':'0 0 0 1px #f5c54255, 0 0 32px -2px #f5c542aa'
+    }
+  } }
+}
+</script>
+<style>
+  html,body{background:#09090b}
+  body{font-family:'Space Grotesk',system-ui,sans-serif;color:#e4e4e7;-webkit-tap-highlight-color:transparent}
+  .ticker{display:inline-block;padding-left:100%;animation:ticker 28s linear infinite}
+  @keyframes ticker{to{transform:translateX(-100%)}}
+  .glitch{animation:glitch 2.6s steps(1) infinite}
+  @keyframes glitch{0%,92%,100%{transform:none;text-shadow:none}93%{transform:translate(-2px,1px);text-shadow:2px 0 #ff2e4d,-2px 0 #22e39a}96%{transform:translate(2px,-1px);text-shadow:-2px 0 #ff2e4d,2px 0 #22e39a}}
+  .chroma{text-shadow:2px 0 #ff2e4d,-2px 0 #22e39a}
+  .flip-wrap{perspective:1200px}
+  .flip-card{transform-style:preserve-3d;transition:transform .75s cubic-bezier(.2,.8,.2,1)}
+  .flip-card[data-flipped="true"]{transform:rotateY(180deg)}
+  .face{backface-visibility:hidden;-webkit-backface-visibility:hidden}
+  .face-front{transform:rotateY(180deg)}
+  .pulse-gold{animation:pg 1.8s ease-out infinite}
+  @keyframes pg{0%{box-shadow:0 0 0 0 #f5c54288}70%{box-shadow:0 0 0 14px #f5c54200}100%{box-shadow:0 0 0 0 #f5c54200}}
+  .bars{background:repeating-linear-gradient(90deg,transparent 0 14px,#ffffff1c 14px 17px)}
+  .noise{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E")}
+  .slide-in{animation:slideIn .45s cubic-bezier(.2,.9,.2,1) both}
+  @keyframes slideIn{from{transform:translateX(-110%) skewX(-8deg)}to{transform:translateX(0) skewX(-8deg)}}
+  .rise{animation:rise .4s ease-out both}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .stamp{animation:stamp .45s cubic-bezier(.2,2,.4,1) both}
+  @keyframes stamp{from{opacity:0;transform:scale(2.4) rotate(-14deg)}to{opacity:1;transform:scale(1) rotate(-8deg)}}
+  .reel{animation:reel 1.4s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes reel{0%{transform:translateY(-300%);filter:blur(4px)}80%{filter:blur(0)}100%{transform:none}}
+  .hold-fill{transition:none;transform:scaleX(0);transform-origin:left}
+  .holding .hold-fill{transition:transform .6s linear;transform:scaleX(1)}
+  .no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+  @media (prefers-reduced-motion:reduce){.ticker,.glitch,.pulse-gold,.reel,.slide-in,.stamp,.rise{animation:none!important}.flip-card{transition:none}}
+</style>
+</head>
+<body class="min-h-screen">
+<div id="app"></div>
+<div id="overlay"></div>
+<script>
+/* Mondayunited States — mesin permainan (aturan v1.2)
+ * Murni JavaScript, tanpa DOM. Dipakai oleh server Node (jalur B) dan oleh
+ * perangkat pembuat room di versi link Claude (jalur A).
+ * State G sepenuhnya JSON-serializable sehingga bisa disimpan & dilanjutkan.
+ */
+(function (root) {
+  'use strict';
+
+  // ------------------------------------------------------------------ DATA
+  const PERSONAS = [
+    { id: 'prof', e: '🎓', n: 'Profesor', t: 'Sudah diteliti, belum dibaca.' },
+    { id: 'emak', e: '🛵', n: 'Emak-emak', t: 'Sein kiri, belok kanan.' },
+    { id: 'ojol', e: '🧥', n: 'Driver Ojol', t: 'Bintang lima, gaji satu.' },
+    { id: 'mhs', e: '📢', n: 'Mahasiswa', t: 'Semester 14, idealisme 100.' },
+    { id: 'rt', e: '📋', n: 'Pak RT', t: 'Fotokopi KTP dua lembar.' },
+    { id: 'seleb', e: '🤳', n: 'Selebgram', t: 'Endorse dulu, klarifikasi nanti.' },
+    { id: 'pns', e: '🗂️', n: 'ASN Teladan', t: 'Datang 07.30, pulang absen.' },
+    { id: 'dukun', e: '🔮', n: 'Konsultan Spiritual', t: 'Prediksi pemilu 100% (setelah hasil).' },
+    { id: 'satpam', e: '🔦', n: 'Satpam Kompleks', t: 'Portal ditutup jam 10.' },
+    { id: 'kades', e: '🧑‍🌾', n: 'Pak Kades', t: 'Dana desa aman, katanya.' },
+    { id: 'grup', e: '📲', n: 'Admin Grup Keluarga', t: 'Forward dari grup sebelah.' },
+    { id: 'wartawan', e: '🎙️', n: 'Wartawan Lepas', t: 'Narasumber: sumber terpercaya.' },
+  ];
+  const BOT_NAMES = ['Budi', 'Sri', 'Joko', 'Ani', 'Rudi', 'Mega', 'Tono', 'Ucup', 'Wati', 'Dedi', 'Lina', 'Asep'];
+  const DARK_ROLES = ['KORUPTOR', 'BROKER', 'BUZZER'];
+  const ROLES = {
+    KORUPTOR: { icon: '🐀', title: 'Koruptor', fac: 'GELAP', desc: 'Anda tidak korupsi, Anda <i>mengoptimalkan anggaran</i>. Setiap malam, fitnah satu warga dengan skandal fiktif.', action: 'Pilih Target Kasus Fiktif' },
+    BROKER: { icon: '🤝', title: 'Broker', fac: 'GELAP', desc: 'Penghubung antara yang butuh dan yang punya. Komisi 10% sudah termasuk pajak. Sekali per game, rekrut satu Warga Sipil menjadi Buzzer.', action: 'Gunakan Hak Rekrut Broker (1x)' },
+    BUZZER: { icon: '📣', title: 'Buzzer', fac: 'GELAP', desc: 'Satu akun, seribu suara. Bayarannya nasi kotak. Setiap malam, balikkan suara satu pemain untuk esok hari.', action: 'Balikkan Suara Target' },
+    KPK: { icon: '🕵️', title: 'Penyidik KPK', fac: 'REFORMIS', desc: 'Gaji UMR, tanggung jawab negara. Setiap malam pilih satu: SADAP (Anda tahu faksi target) atau OTT (jika target Faksi Gelap, ia jadi Tersangka besok; jika bersih, berita mengumumkan OTT salah sasaran).', action: 'Sadap atau OTT' },
+    JURNALIS: { icon: '🎙️', title: 'Jurnalis Investigasi', fac: 'REFORMIS', desc: 'Deadline jam 5, klarifikasi jam 5 lewat 1. Setiap malam, cek fakta satu pemain: fitnah ke dia jadi HOAKS. Kalau dijebloskan Presiden, Anda dapat Hak Headline.', action: 'Cek Fakta Satu Pemain' },
+    PENGAMAT: { icon: '📊', title: 'Pengamat Politik', fac: 'REFORMIS', desc: 'Analisis saya selalu tepat, setelah kejadian. Setiap malam, amati satu pemain dan ketahui siapa yang ia datangi.', action: 'Amati Pergerakan Satu Pemain' },
+    GURU_BESAR: { icon: '🧑‍🏫', title: 'Guru Besar', fac: 'REFORMIS', desc: 'Menurut kajian saya (halaman 3 dari 400)… Sekali per game saat Sidang, serahkan Kesaksian Ahli: Presiden tahu faksi asli Tersangka.', action: 'Kesaksian Ahli ke Presiden (1x, siang)' },
+    WARGA: { icon: '🧍', title: 'Warga Sipil', fac: 'REFORMIS', desc: 'Tidak punya kuasa, hanya punya kuota. Senjata Anda: debat di Sidang, coblosan, dan petisi.', action: null },
+  };
+  const WIN_TEXT = {
+    GELAP: 'Menang jika semua Reformis dipenjara, Koruptor terpilih Presiden 3 kali, atau hari ke-20 lewat.',
+    REFORMIS: 'Menang jika semua Koruptor, Broker, dan Buzzer mendekam di penjara sebelum hari ke-20.',
+  };
+  const DIST_KEYS = ['KORUPTOR', 'BROKER', 'BUZZER', 'KPK', 'JURNALIS', 'PENGAMAT', 'GURU_BESAR'];
+  const NINE_PLUS = ['PENGAMAT', 'GURU_BESAR'];
+  const DIST = {
+    6: [1, 1, 0, 1, 1, 0, 0], 7: [1, 1, 1, 1, 1, 0, 0], 8: [1, 1, 1, 1, 1, 0, 0],
+    9: [2, 1, 1, 1, 1, 1, 1], 10: [2, 1, 1, 1, 1, 1, 1], 11: [2, 1, 1, 1, 1, 1, 1], 12: [2, 2, 1, 1, 1, 1, 1],
+  };
+  const CARDS = [
+    { id: 'joki', title: 'Joki Skripsi Jalur Ordal', h: '{t} ketahuan joki skripsi 40 mahasiswa, auto lulus cumlaude!' },
+    { id: 'pinjol', title: 'Pinjol Pakai KTP Warga', h: '{t} ajukan pinjol pakai KTP sekampung, limit langsung cair!' },
+    { id: 'judol', title: 'Beking Situs Judol', h: '{t} diduga beking judol, slot gacor disebut "investasi digital"!' },
+    { id: 'flexing', title: 'Flexing Tas Branded Keluarga', h: 'Istri {t} flexing tas 1 M, netizen langsung spill LHKPN!' },
+    { id: 'mobil', title: 'Mobil Mewah Anak Pejabat', h: 'Anak {t} pamer mobil mewah, platnya ternyata pelat dinas!' },
+    { id: 'ijazah', title: 'Ijazah Editan Canva', h: 'Ijazah {t} ternyata editan Canva, fontnya Comic Sans!' },
+    { id: 'laptop', title: 'Mark-up Laptop Sekolah', h: 'Laptop sekolah 3 juta dibeli {t} 30 juta, speknya kentang!' },
+    { id: 'bbm', title: 'BBM Oplosan', h: '{t} oplos BBM, pertamax rasa pertalite, motor warga auto batuk!' },
+    { id: 'beras', title: 'Beras Premium Oplosan', h: 'Beras premium {t} ternyata oplosan, yang wangi cuma labelnya!' },
+    { id: 'laut', title: 'Sertifikat Tanah di Tengah Laut', h: '{t} punya sertifikat tanah di tengah laut, ikan pun kena gusur!' },
+    { id: 'tunjangan', title: 'Tunjangan Kos 50 Juta', h: '{t} terima tunjangan kos 50 juta per bulan, kosnya di Bali!' },
+    { id: 'joget', title: 'Joget Pas Rakyat Demo', h: '{t} joget di ruang sidang saat rakyat demo, empatinya lagi healing!' },
+    { id: 'haji', title: 'Kuota Haji Jalur VIP', h: '{t} jual kuota haji jalur VIP, antrean 40 tahun di-skip!' },
+    { id: 'cpns', title: 'Titip Ponakan di CPNS', h: '{t} titip 7 ponakan lolos CPNS, semua ranking 1 dari belakang!' },
+    { id: 'mbg', title: 'Vendor Makan Gratis Fiktif', h: 'Vendor makan gratis milik {t} ternyata alamatnya warung kopi!' },
+    { id: 'bansos', title: 'Bansos Jadi Konten', h: '{t} bagi bansos sambil live, dapur warga jadi studio konten!' },
+    { id: 'koin', title: 'Koin Kripto Pejabat', h: '{t} rilis koin meme, pump seminggu, dump selamanya!' },
+    { id: 'buzzer', title: 'Buzzer Dibayar APBD', h: '{t} bayar buzzer pakai APBD, nasi kotak masuk SPJ!' },
+    { id: 'tol', title: 'Proyek Tol Siluman', h: '{t} resmikan tol yang cuma ada di PowerPoint!' },
+    { id: 'sawit', title: 'Kebun Sawit di Hutan Lindung', h: '{t} punya kebun sawit di hutan lindung, orangutan auto ngontrak!' },
+  ];
+  const VISI = ['Wifi Gratis Seumur Hidup', 'Hapus Hari Senin', 'Makan Siang Gratis untuk Pejabat', 'Lima Hari Libur Seminggu', 'Bansos Langsung ke Dompet Digital', 'Macet Dijadikan Wisata', 'Tol Gratis Tiap Lebaran', 'Kuota Internet Unlimited Nasional'];
+  const SIDANG_LINES = [
+    '{s} kok diam aja dari tadi? 🤔', 'FITNAH! Saya cuma beli NFT kucing satu biji.', 'Presiden {p} harus tegas, jangan masuk angin!',
+    'Saya curiga sama yang paling rajin ngomong integritas.', 'Ini mah pengalihan isu, harga cabai naik nih.', 'Coba cek siapa yang semalam online jam 2 pagi 😏',
+    'Tolong {p}, rakyat butuh kepastian hukum.', 'Kalau saya Koruptor, saya nggak akan sebodoh itu.', 'Petisi sudah saya share di grup keluarga.',
+    'Saya netral. Netral condong ke kanan sedikit.', '{s} spill dong asal-usul mobil mewahnya.', 'Jangan buru-buru, nanti salah tangkap lagi kayak kemarin.',
+    'No debat, {s} red flag banget.', 'Yang bela {s} mati-matian justru mencurigakan.', 'Saya mah ikut keputusan Presiden aja, asal ada nasi kotaknya.',
+  ];
+  const ELECTION_LINES = ['Pilih saya, Senin saya hapus!', 'Visi saya jelas: wifi kencang, rakyat senang.', 'Jangan golput ya, gais.', 'Saya sih pilih yang mukanya paling jujur.', 'Serangan fajar belum datang nih 😅'];
+  const DARK_LINES = ['Target malam ini yang paling berisik aja.', 'Jangan si {p}, dia imun.', 'Kartu ijazah biasanya laku.', 'Aman, Jurnalis kayaknya lagi cek fakta orang lain.', 'Siap, saya ikut saja. Komisi biasa ya.'];
+  const APPEAL_LINES = ['Saya hanya disuruh, Pak.', 'Saya siap jadi justice collaborator.', 'Saya punya anak istri dan cicilan.', 'Ini kriminalisasi!'];
+  const LETTER_LINES = ['Saya dijebak! Cek lagi berkasnya.', 'Yang teriak paling keras itu justru pelakunya.', 'Tolong sampaikan ke keluarga, saya baik-baik saja.'];
+  const COLUMN_LINES = ['Saya dipenjara karena menulis. Yang korupsi masih rapat di hotel.', 'Berita ini ditulis dengan pensil pinjaman sipir. Cek lagi Keppres-nya.', 'Yang menjebloskan saya lebih takut fakta daripada hoaks.'];
+
+  const FIXED_T = { reveal: 60, election: 45, morning: 9, decision: 30 };
+  const MAX_DAYS = 20;
+  const MIN_PLAYERS = 6, MAX_PLAYERS = 12;
+
+  // --------------------------------------------------------------- HELPERS
+  const rnd = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const P = (G, id) => G.players.find((p) => p.id === id);
+  const isDark = (p) => !!p && DARK_ROLES.includes(p.role);
+  const free = (G) => G.players.filter((p) => !p.jailed);
+  const pres = (G) => (G.presidentId != null ? P(G, G.presidentId) : null);
+  const card = (id) => CARDS.find((c) => c.id === id);
+  const persona = (id) => PERSONAS.find((x) => x.id === id) || PERSONAS[0];
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  const active = (p) => p.bot || p.connected; // pemain yang ditunggu
+
+  const openCases = (G) => G.cases.filter((c) => !c.vetoed && !c.closed && P(G, c.suspect) && !P(G, c.suspect).jailed);
+  const caseSuspects = (G) => openCases(G).map((c) => c.suspect);
+  // Pelaksana tugas: jika semua Koruptor dipenjara, Broker/Buzzer yang bebas mengambil alih kartu skandal
+  const scandalActors = (G) => free(G).filter((p) => p.role === 'KORUPTOR'); // tanpa Plt.: jika semua Koruptor dipenjara, sisa Faksi Gelap hanya bisa mengulur waktu
+  function stat(G, id, k) { G.stats[id] = G.stats[id] || {}; G.stats[id][k] = (G.stats[id][k] || 0) + 1; }
+  function sys(G, text) { G.chat.push({ id: ++G.seq, sys: true, text }); trimChat(G); }
+  function say(G, from, text, extra) { G.chat.push(Object.assign({ id: ++G.seq, from, text }, extra || {})); trimChat(G); }
+  function trimChat(G) { if (G.chat.length > 70) G.chat.splice(0, G.chat.length - 70); }
+  function note(G, pid, text, tone) { (G.notes[pid] = G.notes[pid] || []).push({ id: ++G.seq, text, tone: tone || 'zinc' }); if (G.notes[pid].length > 12) G.notes[pid].shift(); }
+  function fx(G, type, title, sub, dur, now) { G.fx = { id: ++G.seq, type, title, sub, at: now, dur }; }
+  function setPhase(G, ph, secs, now) { G.phase = ph; G.phaseStart = now; G.phaseDur = secs || 0; G.endsAt = secs ? now + secs * 1000 : 0; scheduleBots(G, now, 1500, 6000); }
+  function later(G, step, ms, now, arg) { G.pending = { at: now + ms, step, arg: arg == null ? null : arg }; }
+
+  // ---------------------------------------------------------------- CREATE
+  function create(code, creatorId, now) {
+    now = now || Date.now();
+    return {
+      v: 3, code: String(code), creatorId, phase: 'LOBBY', phaseStart: now, phaseDur: 0, endsAt: 0, pending: null, rev: 1, seq: 0,
+      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5 },
+      players: [], day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true,
+      cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null,
+      nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null,
+      election: null, chat: [], dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {},
+      decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', botAt: {}, createdAt: now, updatedAt: now,
+    };
+  }
+
+  // ----------------------------------------------------------------- LOBBY
+  function join(G, pid, info, now) {
+    now = now || Date.now();
+    const ex = P(G, pid);
+    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, clean(info.name, 14) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (G.phase !== 'LOBBY') return { err: 'Sidang sudah berjalan. Tunggu ronde berikutnya.' };
+    if (G.players.length >= MAX_PLAYERS) return { err: 'Ruang sidang penuh (12 kursi).' };
+    const p = blankPlayer(pid, uniqueName(G, clean(info && info.name, 14) || 'Warga', pid), null, false);
+    G.players.push(p); setPersona(G, p, info && info.persona);
+    if (!G.creatorId || !P(G, G.creatorId)) G.creatorId = pid;
+    sys(G, `📝 ${p.name} hadir di ruang sidang.`);
+    bump(G, now); return { ok: true };
+  }
+  function blankPlayer(id, name, persona, bot) {
+    return { id, name, persona, bot: !!bot, connected: true, role: null, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, lastChatAt: 0 };
+  }
+  function uniqueName(G, name, pid) {
+    let n = name, i = 2; while (G.players.some((p) => p.id !== pid && p.name.toLowerCase() === n.toLowerCase())) n = `${name} (${i++})`; return n;
+  }
+  function setPersona(G, p, want) {
+    const taken = new Set(G.players.filter((x) => x.id !== p.id).map((x) => x.persona));
+    if (want && PERSONAS.some((x) => x.id === want) && !taken.has(want)) p.persona = want;
+    else if (!p.persona || taken.has(p.persona)) p.persona = (PERSONAS.find((x) => !taken.has(x.id)) || PERSONAS[0]).id;
+  }
+  function addBot(G) {
+    if (G.players.length >= MAX_PLAYERS) return { err: 'Ruang sidang penuh.' };
+    const name = BOT_NAMES.find((n) => !G.players.some((p) => p.name === n)) || 'Bot' + G.players.length;
+    const p = blankPlayer('bot_' + (++G.seq) + '_' + Math.random().toString(36).slice(2, 6), name, null, true);
+    G.players.push(p); setPersona(G, p, null); return { ok: true };
+  }
+  function distCounts(G) {
+    const n = G.players.length, d = G.settings.auto ? (DIST[Math.min(12, Math.max(6, n))] || DIST[6]).slice() : G.settings.dist.slice();
+    const dark = d[0] + d[1] + d[2], warga = n - d.reduce((a, b) => a + b, 0), lockOk = n >= 9 || (d[5] === 0 && d[6] === 0);
+    return { d, n, dark, ref: n - dark, warga, valid: n >= MIN_PLAYERS && n <= MAX_PLAYERS && warga >= 0 && dark < n - dark && d[0] >= 1 && lockOk };
+  }
+  function startGame(G, now) {
+    const dc = distCounts(G);
+    if (G.players.length < MIN_PLAYERS) return { err: `Minimal ${MIN_PLAYERS} pemain. Tambahkan bot jika kurang.` };
+    if (!dc.valid) return { err: 'Komposisi role tidak valid untuk jumlah pemain ini.' };
+    const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
+    shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
+    Object.assign(G, { day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
+    setPhase(G, 'REVEAL', FIXED_T.reveal, now);
+    return { ok: true };
+  }
+
+  // -------------------------------------------------------------- ELECTION
+  function startElection(G, reason, now) {
+    const sus = G.pendingDecision ? caseSuspects(G) : [];
+    // Rehabilitasi politik: cacat politik hanya berlaku satu masa jabatan
+    G.players.forEach((p) => { if (p.impeached && p.banUntil !== Infinity && G.term.n >= (p.banUntil || 0)) { p.impeached = false; sys(G, `🕊️ ${p.name} direhabilitasi. Hak dipilihnya pulih.`); } });
+    const justOut = reason === 'makzul' ? G.lastImpeached : null; // yang baru dimakzulkan tidak ikut pemilu kilat yang sama
+    const elig = free(G).filter((p) => !p.impeached && !sus.includes(p.id) && p.id !== justOut);
+    G.presidentId = null; G.plt = false;
+    if (elig.length < 2) {
+      if (elig.length === 1) { install(G, elig[0].id, 'satu-satunya kandidat', now); return; }
+      // Plt. Presiden darurat: diundi dari semua pemain bebas, 1 putaran, tanpa Hak Veto
+      const pool = free(G).filter((p) => !sus.includes(p.id)); const pick = pool.length ? pool : free(G);
+      if (pick.length) { install(G, rnd(pick).id, 'Plt. darurat, diundi karena tidak ada kandidat', now, false, true); return; }
+      if (G.pendingDecision) { G.pendingDecision = false; }
+      startNight(G, now); return;
+    }
+    const cands = shuffle(elig).slice(0, 2).map((p) => p.id), v = shuffle(VISI);
+    G.election = { cands, votes: {}, reason, visi: { [cands[0]]: v[0], [cands[1]]: v[1] }, done: false };
+    setPhase(G, 'ELECTION', FIXED_T.election, now);
+  }
+  function electionVoters(G) { return G.players.filter((p) => !G.election.cands.includes(p.id)); }
+  function maybeFinishElection(G, now) {
+    if (G.pending || G.election.done) return;
+    if (electionVoters(G).filter(active).every((p) => G.election.votes[p.id] != null)) later(G, 'finishElection', 900, now);
+  }
+  function finishElection(G, now) {
+    const e = G.election; if (!e || e.done) return; e.done = true; G.endsAt = 0;
+    const [a, b] = e.cands, t = { [a]: 0, [b]: 0 };
+    Object.keys(e.votes).forEach((v) => { let c = e.votes[v]; if (v === G.flipTarget) c = c === a ? b : a; if (t[c] != null) t[c]++; });
+    let win, coin = false;
+    if (t[a] === t[b]) { win = rnd([a, b]); coin = true; } else win = t[a] > t[b] ? a : b;
+    install(G, win, `${t[win]} vs ${t[win === a ? b : a]} suara${coin ? ', diputuskan Mahkamah Koin' : ''}`, now, coin);
+  }
+  function install(G, win, how, now, coin, plt) {
+    const p = P(G, win);
+    G.presidentId = win; G.plt = !!plt; G.term = { n: G.term.n + 1, round: plt ? 2 : 1 }; G.vetoAvailable = !plt; stat(G, win, 'pres');
+    if (p.role === 'KORUPTOR' && !plt) G.darkTerms++;
+    sys(G, `👑 ${p.name} dilantik sebagai ${plt ? 'Plt. Presiden' : 'Presiden'} (${how}).`);
+    G.history.push(plt ? `Kursi kosong: ${p.name} jadi Plt. Presiden` : `Pemilu: ${p.name} jadi Presiden`);
+    fx(G, coin ? 'coin' : 'inaug', coin ? '🪙 Seri! Mahkamah Koin memutuskan' : `👑 ${plt ? 'Plt. ' : ''}${p.name}`, coin ? `${p.name} dilantik sebagai Presiden` : plt ? 'Tidak ada kandidat tersisa. Plt. Presiden diundi untuk 1 putaran, tanpa Hak Veto.' : `Dilantik sebagai Presiden • Periode ${G.term.n}`, 2600, now);
+    if (checkWin(G, now)) return;
+    later(G, 'afterInstall', 2700, now);
+  }
+
+  // ----------------------------------------------------------------- NIGHT
+  function dealHand(G) { if (G.deck.length < 5) G.deck = shuffle(CARDS.map((c) => c.id)); return G.deck.slice(0, 5); }
+  function startNight(G, now) {
+    if (G.day >= MAX_DAYS) { G.winner = 'GELAP'; G.reason = `Hari ke-${MAX_DAYS} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
+    G.day++; G.cases = []; G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
+    G.hand = dealHand(G); G.korChoice = null; G.nightActs = {}; G.decided = false; G.appeals = [];
+    setPhase(G, 'NIGHT', G.settings.timers.night, now);
+  }
+  function validTarget(G, me, tid, opts) {
+    const t = P(G, tid); if (!t || t.jailed) return null;
+    if (!opts.self && t.id === me.id) return null;
+    if (opts.notDark && isDark(t)) return null;
+    if (opts.notPres && t.id === G.presidentId) return null;
+    return t;
+  }
+  function nightAction(G, me, a, now) {
+    if (G.phase !== 'NIGHT' || G.pending) return { err: 'Bukan waktunya.' };
+    if (me.jailed) return { err: 'Napi tidak beraksi malam hari.' };
+    const r = me.role, k = a.kind;
+    // Plt. Koruptor: Broker/Buzzer memilih kasus fiktif tanpa menghabiskan aksi role-nya
+    if (k === 'SCANDAL' && r !== 'KORUPTOR') {
+      if (!scandalActors(G).some((p) => p.id === me.id)) return { err: 'Hanya Koruptor yang bisa memfitnah.' };
+      const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
+      if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
+      G.korChoice = { target: t.id, card: a.card, by: me.id }; return { ok: true };
+    }
+    if (G.nightActs[me.id] && me.role !== 'KORUPTOR') return { err: 'Aksi sudah terkirim.' };
+    if (k === 'DUMMY') { /* lewati malam: semua role boleh */ }
+    else if (r === 'KORUPTOR') {
+      if (k === 'SCANDAL') {
+        const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
+        if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
+        G.korChoice = { target: t.id, card: a.card, by: me.id };
+      } else if (k !== 'AGREE' || !G.korChoice) return { err: 'Pilih target dan kartu.' };
+    } else if (r === 'BROKER') {
+      if (k === 'RECRUIT') { if (G.recruitUsed) return { err: 'Hak rekrut sudah terpakai.' }; if (!validTarget(G, me, a.target, { notDark: true, notPres: true })) return { err: 'Target tidak valid.' }; }
+      else if (k !== 'PASS') return { err: 'Aksi tidak valid.' };
+    } else if (r === 'BUZZER') { if (k !== 'FLIP' || !validTarget(G, me, a.target, {})) return { err: 'Target tidak valid.' }; }
+    else if (r === 'KPK') {
+      if (k === 'OTT') {
+        if (!validTarget(G, me, a.target, { notPres: true })) return { err: 'Target tidak valid (Presiden imun).' };
+      } else {
+        const t = k === 'INVESTIGATE' && validTarget(G, me, a.target, {}); if (!t) return { err: 'Target tidak valid.' };
+        const fac = isDark(t) ? 'GELAP' : 'REFORMIS';
+        (G.investigations[me.id] = G.investigations[me.id] || []).push({ id: t.id, fac, night: G.day });
+      }
+    } else if (r === 'JURNALIS') {
+      if (k !== 'FACTCHECK' || !validTarget(G, me, a.target, { self: true }) || a.target === G.lastProtected[me.id]) return { err: 'Target tidak valid.' };
+    } else if (r === 'PENGAMAT') { if (k !== 'OBSERVE' || !validTarget(G, me, a.target, {})) return { err: 'Target tidak valid.' }; }
+    else if (k !== 'DUMMY') return { err: 'Aksi tidak valid.' };
+    G.nightActs[me.id] = { kind: k, target: a.target == null ? null : a.target, card: a.card || null };
+    maybeEndNight(G, now);
+    return { ok: true };
+  }
+  function maybeEndNight(G, now) {
+    if (G.pending) return;
+    if (free(G).filter(active).every((p) => G.nightActs[p.id])) later(G, 'resolveNight', 1800, now);
+  }
+  function resolveNight(G, now) {
+    const acts = G.nightActs, visits = {};
+    const byRole = (r) => free(G).filter((p) => p.role === r);
+    // 1. Broker rekrut
+    for (const br of byRole('BROKER')) {
+      const a = acts[br.id]; if (!a || a.kind !== 'RECRUIT' || G.recruitUsed) continue;
+      const t = P(G, a.target); if (!t || t.jailed || t.id === G.presidentId || isDark(t)) continue;
+      G.recruitUsed = true; visits[br.id] = t.id;
+      if (t.role === 'WARGA') {
+        t.role = 'BUZZER'; t.recruited = true;
+        note(G, br.id, `🤝 Rekrut berhasil: ${t.name} kini Buzzer.`, 'korup');
+        note(G, t.id, '🤝 Anda menerima amplop. Anda kini BUZZER (Faksi Gelap). Cek kartu role Anda.', 'korup');
+        G.players.filter((p) => isDark(p) && p.id !== t.id && p.id !== br.id).forEach((p) => note(G, p.id, `🤝 ${t.name} bergabung ke sindikat sebagai Buzzer.`, 'korup'));
+      } else note(G, br.id, `🙅 ${t.name} menolak amplop (bukan Warga Sipil). Hak rekrut hangus.`, 'korup');
+      break;
+    }
+    // 2. Jurnalis cek fakta
+    const protectedSet = new Set();
+    for (const j of byRole('JURNALIS')) { const a = acts[j.id]; if (a && a.kind === 'FACTCHECK') { protectedSet.add(a.target); visits[j.id] = a.target; G.lastProtected[j.id] = a.target; } else delete G.lastProtected[j.id]; }
+    // 3. Koruptor
+    let tgt = null, cid = null;
+    const kor = scandalActors(G);
+    if (!G.korChoice && kor.length && kor.every((k) => k.bot)) botScandal(G, rnd(kor));
+    if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; visits[G.korChoice.by] = tgt; } }
+    if (cid) G.deck = G.deck.filter((x) => x !== cid);
+    // 4. Buzzer
+    G.flipTarget = null;
+    for (const bz of byRole('BUZZER')) { const a = acts[bz.id]; if (a && a.kind === 'FLIP') { G.flipTarget = a.target; visits[bz.id] = a.target; } }
+    // 5. KPK
+    const kpkCases = [];
+    for (const k of byRole('KPK')) { const a = acts[k.id]; if (a && (a.kind === 'INVESTIGATE' || a.kind === 'OTT')) visits[k.id] = a.target; if (a && a.kind === 'OTT') kpkCases.push(a.target); }
+    // 6. Pengamat
+    for (const pg of byRole('PENGAMAT')) { const a = acts[pg.id]; if (a && a.kind === 'OBSERVE') visits[pg.id] = a.target; }
+    for (const pg of byRole('PENGAMAT')) {
+      const a = acts[pg.id]; if (!a || a.kind !== 'OBSERVE') continue;
+      const v = visits[a.target], t = P(G, a.target);
+      (G.observations[pg.id] = G.observations[pg.id] || []).push({ id: a.target, visited: v == null ? null : v, night: G.day });
+      note(G, pg.id, `📊 Pengamatan: ${t.name} ${v != null ? 'semalam mendatangi ' + P(G, v).name : 'tidak ke mana-mana semalam'}.`, 'reform');
+    }
+    // berita
+    if (tgt == null) G.news = { kind: 'QUIET', head: 'Malam sepi, tikus sedang cuti bersama', low: 'Tidak ada kasus baru semalam.' };
+    else if (protectedSet.has(tgt)) G.news = { kind: 'BLOCKED', head: `HOAKS! Kasus ${card(cid).title} terbantahkan cek fakta`, low: `${P(G, tgt).name} lolos dari fitnah. Tim cek fakta bergerak semalam.` };
+    else {
+      const t = P(G, tgt); G.scandal++; t.suspect = true; stat(G, tgt, 'fitnah');
+      G.cases.push({ id: 'F', kind: 'FITNAH', suspect: tgt, card: cid, no: `KF/${pad2(G.day)}/${G.code}`, vetoed: false });
+      G.news = { kind: 'SUCCESS', head: card(cid).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA` };
+    }
+    for (const sid of kpkCases) {
+      const t = P(G, sid); if (!t || t.jailed) continue;
+      if (!isDark(t)) { G.news.kpk = `OTT KPK salah sasaran: ${persona(t.persona).e} ${t.name} dinyatakan BERSIH.`; G.history.push(`Malam ${G.day}: OTT gagal, ${t.name} bersih`); continue; }
+      if (G.cases.some((c) => c.suspect === sid)) continue;
+      t.suspect = true; G.cases.push({ id: 'K' + sid, kind: 'KPK', suspect: sid, card: null, no: `OTT/${pad2(G.day)}/${G.code}`, vetoed: false });
+      G.news.kpk = `OTT KPK! ${persona(t.persona).e} ${t.name} tertangkap tangan dan ditetapkan TERSANGKA.`;
+      G.history.push(`Malam ${G.day}: OTT KPK, ${t.name} tersangka`);
+    }
+    if (G.pendingColumn) { G.news.column = G.pendingColumn; G.pendingColumn = null; }
+    G.news.id = ++G.seq;
+    G.history.push(`Malam ${G.day}: ${G.news.kind === 'SUCCESS' ? `${P(G, tgt).name} difitnah (${card(cid).title})` : G.news.kind === 'BLOCKED' ? 'fitnah digagalkan cek fakta' : 'sepi'}`);
+    if (checkWin(G, now)) return;
+    setPhase(G, 'MORNING', FIXED_T.morning, now);
+  }
+
+  // ------------------------------------------------------------------- DAY
+  function startSidang(G, now) {
+    G.sigs = {}; G.skip = {};
+    sys(G, `☀️ Sidang Paripurna hari ke-${G.day} dibuka.${G.cases.length ? ` ${G.cases.map((c) => c.no).join(' & ')} menunggu keputusan Presiden.` : ''}`);
+    setPhase(G, 'SIDANG', G.settings.timers.sidang, now);
+  }
+  function impeachNumbers(G) {
+    const pool = free(G).filter((p) => p.id !== G.presidentId);
+    let eff = 0; Object.keys(G.sigs).forEach((id) => { const p = P(G, id); if (!p || p.jailed || p.id === G.presidentId) return; eff += id === G.flipTarget ? -1 : 1; });
+    eff = Math.max(0, eff); const needed = Math.max(1, Math.ceil(pool.length / 2));
+    return { eff, needed, pct: pool.length ? Math.min(100, Math.round((eff / pool.length) * 100)) : 0 };
+  }
+  function checkImpeach(G, now) {
+    if (G.presidentId == null || G.decided || G.carryover) return false;
+    const { eff, needed } = impeachNumbers(G); if (eff < needed) return false;
+    const p = pres(G); p.impeachCount = (p.impeachCount || 0) + 1; G.lastImpeached = p.id;
+    if (p.impeachCount >= 2) { p.impeached = true; p.banUntil = Infinity; } // cacat politik permanen di pemakzulan kedua
+    G.presidentId = null; G.plt = false; G.sigs = {};
+    G.pendingDecision = openCases(G).length > 0;
+    G.history.push(`Hari ${G.day}: ${p.name} dimakzulkan`);
+    sys(G, `🔥 ${p.name} DIMAKZULKAN rakyat${p.impeachCount >= 2 ? ' untuk kedua kalinya dan kini CACAT POLITIK' : ' (peringatan pertama)'}.${G.pendingDecision ? ' Keppres ditunda.' : ''} Pemilu kilat digelar.`);
+    fx(G, 'impeach', '🔥 Istana dikepung!', `${p.name} dimakzulkan. ${G.pendingDecision ? 'Keppres ditunda, ' : ''}Pemilu kilat digelar.`, 3000, now);
+    G.endsAt = 0; later(G, 'startElection', 3100, now, 'makzul');
+    return true;
+  }
+  function maybeSkip(G, now) {
+    const pool = free(G).filter(active), n = Object.keys(G.skip).filter((id) => { const p = P(G, id); return p && !p.jailed; }).length;
+    if (pool.length && n >= Math.ceil(pool.length * 0.6)) { sys(G, '⏭️ Mayoritas sidang siap. Berkas naik ke meja Presiden.'); startDecision(G, now); }
+  }
+  function startDecision(G, now) {
+    G.decided = false;
+    setPhase(G, 'DECISION', FIXED_T.decision, now);
+    if (G.presidentId == null) { G.endsAt = 0; later(G, 'afterDecision', 1500, now); }
+  }
+  function doVeto(G, caseId, now) {
+    const c = openCases(G).find((x) => x.id === caseId) || (caseId == null ? openCases(G)[0] : null);
+    if (!c || !G.vetoAvailable || G.decided) return { err: 'Veto tidak bisa dipakai sekarang.' };
+    c.vetoed = true; G.vetoAvailable = false; const s = P(G, c.suspect); if (s) s.suspect = false;
+    const fit = c.kind === 'FITNAH'; if (fit) G.scandal = Math.max(0, G.scandal - 1);
+    sys(G, `✨ Presiden ${pres(G).name} menggunakan HAK VETO. Kasus ${c.no} dibatalkan${fit ? ', Skandal −1' : ''}.`);
+    G.history.push(`Hari ${G.day}: Veto atas ${c.no}`);
+    fx(G, 'veto', '✨ VETO!', `Kasus ${c.no} dibatalkan.${fit ? ' Skandal −1.' : ''}`, 1800, now);
+    return { ok: true };
+  }
+  function applyDecision(G, kind, pid, now) {
+    if (G.phase !== 'DECISION' || G.decided) return { err: 'Keputusan sudah diambil.' };
+    let title = '', sub = '';
+    const clearSuspects = () => G.players.forEach((p) => (p.suspect = false));
+    if (kind === 'JAIL') {
+      const c = openCases(G).find((x) => x.suspect === pid) || (pid == null ? openCases(G)[0] : null);
+      if (!c) return { err: 'Tidak ada tersangka untuk dijebloskan.' };
+      const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects();
+      title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${c.kind === 'KPK' ? 'penetapan KPK' : card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
+      if (s.role === 'JURNALIS') {
+        if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
+        else { s.headlineRight = true; note(G, s.id, '📰 Anda mendapat Hak Headline. Tulis dari sel Anda di Rutan Negara.', 'istana'); }
+      }
+    } else if (kind === 'FREE') {
+      const s = P(G, pid); if (!s || !s.jailed) return { err: 'Pilih napi yang valid.' };
+      const wasDark = isDark(s);
+      s.jailed = false; s.role = 'WARGA'; s.recruited = false; s.headlineRight = false; s.exNapi = true;
+      title = 'DIBEBASKAN'; sub = `${s.name} keluar dari Rutan Negara sebagai Warga Sipil biasa.`; clearSuspects();
+      note(G, s.id, '🔓 Anda bebas, tapi semua jabatan lama dicabut. Anda kini WARGA SIPIL biasa (Reformis). Cek kartu role Anda.', 'reform');
+      if (wasDark) G.players.filter((p) => isDark(p)).forEach((p) => note(G, p.id, `🚪 ${s.name} keluar dari sindikat setelah bebas. Ia kini Warga Sipil biasa.`, 'korup'));
+      G.history.push(`Hari ${G.day}: ${s.name} dibebaskan`);
+    } else { title = 'STATUS QUO'; sub = 'Presiden memilih diam. Tuduhan dikesampingkan.'; clearSuspects(); }
+    G.decided = true; G.endsAt = 0;
+    sys(G, `🏛️ KEPPRES No. ${pad2(G.day)}/${G.code}: ${sub}`);
+    fx(G, 'stamp', title, sub, 2600, now);
+    if (!checkWin(G, now)) later(G, 'afterDecision', 2700, now);
+    return { ok: true };
+  }
+  function afterDecision(G, now) {
+    G.flipTarget = null; G.appeals = []; G.expertReport = null;
+    if (G.carryover) { G.carryover = false; startNight(G, now); return; }
+    if (G.presidentId == null) { startElection(G, 'kosong', now); return; }
+    G.term.round++;
+    if (G.term.round > 2) { sys(G, `🗓️ Masa jabatan ${G.plt ? 'Plt. ' : ''}${pres(G).name} berakhir.`); G.history.push(`Masa jabatan ${pres(G).name} selesai`); startElection(G, 'habis', now); }
+    else startNight(G, now);
+  }
+  function checkWin(G, now) {
+    let w = null, r = '';
+    if (G.players.filter(isDark).every((p) => p.jailed)) { w = 'REFORMIS'; r = 'Seluruh sindikat mendekam di Rutan Negara. Untuk sementara.'; }
+    else if (G.players.filter((p) => !isDark(p)).every((p) => p.jailed)) { w = 'GELAP'; r = 'Semua Reformis sudah dipenjara. Yang tersisa di luar hanya yang “bisa diatur”.'; }
+    else if (G.darkTerms >= 3) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
+    if (!w) return false;
+    G.winner = w; G.reason = r; G.pending = null; setPhase(G, 'END', 0, now); return true;
+  }
+
+  // --------------------------------------------------------------- ACTIONS
+  function act(G, pid, a, now) {
+    now = now || Date.now();
+    const me = P(G, pid); if (!me || !a || typeof a.t !== 'string') return { err: 'Pemain tidak dikenal.' };
+    const res = dispatch(G, me, a, now);
+    if (res && res.ok) bump(G, now);
+    return res || { err: 'Aksi tidak dikenal.' };
+  }
+  function bump(G, now) { G.rev++; G.updatedAt = now; }
+  function dispatch(G, me, a, now) {
+    const isCreator = me.id === G.creatorId, ph = G.phase;
+    switch (a.t) {
+      // lobby
+      case 'persona': if (ph !== 'LOBBY') return; setPersona(G, me, a.persona); return { ok: true };
+      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, clean(a.name, 14) || me.name, me.id); return { ok: true };
+      case 'settings': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room.' };
+        const s = a.settings || {}; if (typeof s.auto === 'boolean') G.settings.auto = s.auto;
+        if (Array.isArray(s.dist) && s.dist.length === 7) G.settings.dist = s.dist.map((x, i) => Math.max(i === 0 ? 1 : 0, Math.min(NINE_PLUS.includes(DIST_KEYS[i]) ? 1 : 3, x | 0)));
+        if ([5, 6, 7].includes(s.scandalTarget)) G.settings.scandalTarget = s.scandalTarget;
+        if (s.timers) { if ([30, 45, 60].includes(s.timers.night)) G.settings.timers.night = s.timers.night; if ([60, 120, 180, 300].includes(s.timers.sidang)) G.settings.timers.sidang = s.timers.sidang; }
+        return { ok: true };
+      }
+      case 'addBot': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room.' }; return addBot(G);
+      case 'kick': {
+        if (ph !== 'LOBBY' || !isCreator || a.id === me.id) return { err: 'Tidak bisa.' };
+        const i = G.players.findIndex((p) => p.id === a.id); if (i < 0) return { err: 'Tidak ada.' };
+        const [p] = G.players.splice(i, 1); if (!p.bot) sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); return { ok: true };
+      }
+      case 'leave': {
+        if (ph !== 'LOBBY') { me.connected = false; return { ok: true }; }
+        G.players = G.players.filter((p) => p.id !== me.id); sys(G, `🚪 ${me.name} meninggalkan ruang sidang.`);
+        if (isCreator) { const h = G.players.find((p) => !p.bot); G.creatorId = h ? h.id : null; if (h) sys(G, `🔁 ${h.name} kini memegang palu sidang.`); }
+        return { ok: true };
+      }
+      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room yang bisa memulai.' }; return startGame(G, now);
+      case 'replay': {
+        if (ph !== 'END' || !isCreator) return { err: 'Hanya pembuat room.' };
+        G.players = G.players.filter((p) => p.bot || p.connected);
+        G.players.forEach((p) => Object.assign(p, { role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
+        Object.assign(G, { winner: null, reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
+        G.chat = []; sys(G, '🔁 Ruang sidang dibuka lagi. Ronde baru!'); setPhase(G, 'LOBBY', 0, now); return { ok: true };
+      }
+      // reveal
+      case 'ready': if (ph !== 'REVEAL') return; me.ready = true; if (G.players.filter(active).every((p) => p.ready)) later(G, 'startElection', 800, now, 'awal'); return { ok: true };
+      // election
+      case 'vote': {
+        if (ph !== 'ELECTION' || !G.election || G.election.done) return { err: 'Pemilu sudah ditutup.' };
+        if (G.election.cands.includes(me.id)) return { err: 'Kandidat tidak boleh mencoblos.' };
+        if (!G.election.cands.includes(a.cand)) return { err: 'Kandidat tidak valid.' };
+        G.election.votes[me.id] = a.cand; maybeFinishElection(G, now); return { ok: true };
+      }
+      // night
+      case 'night': return nightAction(G, me, a, now);
+      case 'dark': {
+        if (!isDark(me) || ph === 'LOBBY' || ph === 'END') return { err: 'Bukan anggota.' };
+        const text = clean(a.text, 160); if (!text) return; if (now - me.lastChatAt < 800) return { err: 'Pelan-pelan.' }; me.lastChatAt = now;
+        G.dark.push({ id: ++G.seq, from: me.id, text }); if (G.dark.length > 50) G.dark.shift(); return { ok: true };
+      }
+      // chat & day
+      case 'chat': case 'react': {
+        if (!['LOBBY', 'ELECTION', 'SIDANG', 'DECISION', 'END'].includes(ph)) return { err: 'Chat dibuka saat siang.' };
+        if (me.jailed) return { err: 'Napi hanya bisa mengirim surat.' };
+        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : clean(a.text, 200);
+        if (!text) return; if (now - me.lastChatAt < 1200) return { err: 'Pelan-pelan, 1 pesan per 1,2 detik.' };
+        me.lastChatAt = now; say(G, me.id, text); return { ok: true };
+      }
+      case 'letter': {
+        if (!['SIDANG', 'DECISION'].includes(ph) || !me.jailed || me.letterDay === G.day) return { err: 'Surat hari ini sudah terkirim.' };
+        const text = clean(a.text, 200); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
+      }
+      case 'sign': {
+        if (!['SIDANG', 'DECISION'].includes(ph) || me.jailed || me.id === G.presidentId || G.decided || G.carryover || G.presidentId == null || G.pending) return { err: 'Petisi tidak bisa ditandatangani sekarang.' };
+        if (a.on) { if (!G.sigs[me.id]) { G.sigs[me.id] = true; stat(G, me.id, 'sign'); sys(G, '⚡ Seseorang menandatangani petisi pemakzulan.'); checkImpeach(G, now); } }
+        else if (G.sigs[me.id]) { delete G.sigs[me.id]; sys(G, '⚡ Seseorang menarik tanda tangannya.'); }
+        return { ok: true };
+      }
+      case 'skip': if (ph !== 'SIDANG' || me.jailed || G.pending) return; G.skip[me.id] = true; maybeSkip(G, now); return { ok: true };
+      case 'appeal': {
+        if (!me.jailed || me.appealUsed || !['SIDANG', 'DECISION'].includes(ph) || G.presidentId == null) return { err: 'Banding tidak bisa diajukan sekarang.' };
+        me.appealUsed = true; const text = clean(a.text, 140) || rnd(APPEAL_LINES);
+        G.appeals.push({ from: me.id, text }); note(G, G.presidentId, `📨 Surat banding baru dari ${me.name}.`, 'istana'); return { ok: true };
+      }
+      case 'headline': {
+        if (!me.jailed || !me.headlineRight) return { err: 'Tidak punya Hak Headline.' };
+        const text = clean(a.text, 90); if (!text) return { err: 'Headline kosong.' };
+        me.headlineRight = false; G.pendingColumn = { by: me.id, text }; note(G, me.id, '📰 Headline Anda masuk antrean redaksi untuk pagi berikutnya.', 'istana'); return { ok: true };
+      }
+      case 'testify': {
+        const oc = openCases(G);
+        if (me.role !== 'GURU_BESAR' || me.jailed || G.expertUsed || !['SIDANG', 'DECISION'].includes(ph) || !oc.length || G.decided || G.presidentId == null) return { err: 'Kesaksian tidak bisa diberikan sekarang.' };
+        G.expertUsed = true; G.expertReport = {}; oc.forEach((c) => { G.expertReport[c.suspect] = isDark(P(G, c.suspect)) ? 'GELAP' : 'REFORMIS'; });
+        sys(G, '🧑‍🏫 Seorang Ahli menyerahkan kajian ke meja Presiden.'); note(G, G.presidentId, '🧑‍🏫 Kajian Ahli baru masuk ke meja Anda.', 'istana'); note(G, me.id, '🧑‍🏫 Kajian Anda sudah di meja Presiden.', 'reform');
+        return { ok: true };
+      }
+      case 'veto': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return doVeto(G, a.case, now);
+      case 'decide': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return applyDecision(G, a.kind === 'JAIL' || a.kind === 'FREE' ? a.kind : 'STATUS_QUO', a.kind === 'JAIL' ? a.suspect : a.prisoner, now);
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ TICK
+  function tick(G, now) {
+    now = now || Date.now();
+    const before = G.rev;
+    if (G.pending && now >= G.pending.at) {
+      const { step, arg } = G.pending; G.pending = null;
+      if (step === 'startElection') startElection(G, arg || 'awal', now);
+      else if (step === 'finishElection') finishElection(G, now);
+      else if (step === 'afterInstall') {
+        if (G.pendingDecision) { G.pendingDecision = false; G.carryover = true; sys(G, `📁 Keppres tertunda (${openCases(G).map((c) => c.no).join(' & ')}) kini di meja Presiden ${pres(G).name}.`); startDecision(G, now); }
+        else startNight(G, now);
+      }
+      else if (step === 'resolveNight') resolveNight(G, now);
+      else if (step === 'afterDecision') afterDecision(G, now);
+      bump(G, now);
+    }
+    if (!G.pending && G.endsAt && now >= G.endsAt) {
+      const ph = G.phase; G.endsAt = 0;
+      if (ph === 'REVEAL') startElection(G, 'awal', now);
+      else if (ph === 'ELECTION') finishElection(G, now);
+      else if (ph === 'NIGHT') resolveNight(G, now);
+      else if (ph === 'MORNING') startSidang(G, now);
+      else if (ph === 'SIDANG') startDecision(G, now);
+      else if (ph === 'DECISION' && !G.decided) applyDecision(G, 'STATUS_QUO', null, now);
+      bump(G, now);
+    }
+    runBots(G, now);
+    if (G.fx && now > G.fx.at + G.fx.dur + 500) { G.fx = null; bump(G, now); }
+    return G.rev !== before;
+  }
+  function setConnected(G, pid, on, now) {
+    const p = P(G, pid); if (!p || p.bot || p.connected === on) return false;
+    p.connected = on; bump(G, now || Date.now());
+    // Pemain yang putus tidak boleh menahan fase
+    if (!on) {
+      if (G.phase === 'NIGHT') maybeEndNight(G, now);
+      if (G.phase === 'ELECTION') maybeFinishElection(G, now);
+      if (G.phase === 'REVEAL' && G.players.filter(active).every((x) => x.ready)) later(G, 'startElection', 800, now, 'awal');
+    }
+    return true;
+  }
+
+  // ------------------------------------------------------------------ BOTS
+  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (p.bot) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
+  function runBots(G, now) {
+    for (const p of G.players) {
+      if (!p.bot) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
+      delete G.botAt[p.id];
+      const next = botAct(G, p, now); if (next) G.botAt[p.id] = now + next;
+      bump(G, now);
+    }
+  }
+  function botScandal(G, p) {
+    const pool = free(G).filter((x) => !isDark(x) && x.id !== G.presidentId); if (!pool.length) return;
+    G.korChoice = { target: rnd(pool).id, card: rnd(G.hand.length ? G.hand : CARDS.map((c) => c.id)), by: p.id };
+  }
+  function botAct(G, p, now) {
+    const ph = G.phase, r = (a, b) => a + Math.random() * (b - a);
+    const others = () => free(G).filter((x) => x.id !== p.id);
+    if (ph === 'REVEAL') { dispatch(G, p, { t: 'ready' }, now); return 0; }
+    if (ph === 'ELECTION') {
+      const e = G.election; if (!e || e.done) return 0;
+      if (e.cands.includes(p.id)) { if (!p.jailed && Math.random() < 0.6) say(G, p.id, rnd(ELECTION_LINES)); return r(8000, 15000); }
+      if (e.votes[p.id] == null) {
+        const [a, b] = e.cands.map((id) => P(G, id)); let pick = rnd(e.cands);
+        if (isDark(p) && isDark(a) !== isDark(b)) pick = isDark(a) ? a.id : b.id;
+        dispatch(G, p, { t: 'vote', cand: pick }, now);
+      }
+      return 0;
+    }
+    if (ph === 'NIGHT') {
+      if (p.jailed || G.nightActs[p.id]) {
+        if (isDark(p) && !p.jailed && G.players.some((x) => !x.bot && isDark(x)) && Math.random() < 0.35) { G.dark.push({ id: ++G.seq, from: p.id, text: rnd(DARK_LINES).replace('{p}', pres(G) ? pres(G).name : 'Presiden') }); }
+        return 0;
+      }
+      const o = others(); let a = { kind: 'DUMMY' };
+      switch (p.role) {
+        case 'KORUPTOR': {
+          const humans = scandalActors(G).filter((x) => !x.bot);
+          if (G.korChoice) a = { kind: 'AGREE' };
+          else if (!humans.length || now > G.endsAt - 6000) { botScandal(G, p); if (!G.korChoice) return 0; a = { kind: 'AGREE' }; }
+          else return Math.max(1000, G.endsAt - 5000 - now);
+          break;
+        }
+        case 'BROKER': { const pool = o.filter((x) => !isDark(x) && x.id !== G.presidentId); a = !G.recruitUsed && G.day >= 2 && pool.length && Math.random() < 0.5 ? { kind: 'RECRUIT', target: rnd(pool).id } : { kind: 'PASS' }; break; }
+        case 'BUZZER': { const pool = o.filter((x) => !isDark(x)); if (pool.length) a = { kind: 'FLIP', target: rnd(pool).id }; break; }
+        case 'KPK': {
+          const inv = G.investigations[p.id] || [], done = inv.map((i) => i.id);
+          const guilty = inv.filter((i) => i.fac === 'GELAP').map((i) => P(G, i.id)).filter((x) => x && !x.jailed && x.id !== G.presidentId);
+          const pool = o.filter((x) => !done.includes(x.id) && x.id !== G.presidentId);
+          if (guilty.length) { a = { kind: 'OTT', target: rnd(guilty).id }; break; }
+          if (pool.length && Math.random() < 0.5) { a = { kind: 'OTT', target: rnd(pool).id }; break; }
+          if (o.length) a = { kind: 'INVESTIGATE', target: rnd(pool.length ? pool : o).id }; break;
+        }
+        case 'JURNALIS': { const pool = free(G).filter((x) => x.id !== G.lastProtected[p.id]); a = { kind: 'FACTCHECK', target: rnd(pool).id }; break; }
+        case 'PENGAMAT': if (o.length) a = { kind: 'OBSERVE', target: rnd(o).id }; break;
+      }
+      // Plt. Koruptor bot
+      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every((x) => x.bot) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
+      const res = nightAction(G, p, a, now); if (res.err) nightAction(G, p, { kind: p.role === 'BROKER' ? 'PASS' : p.role === 'KPK' ? 'INVESTIGATE' : 'DUMMY', target: o.length ? rnd(o).id : null }, now);
+      return 0;
+    }
+    if (ph === 'SIDANG' || ph === 'DECISION') {
+      const oc = openCases(G), c = oc[0], prez = pres(G);
+      if (p.jailed) {
+        if (p.letterDay !== G.day && Math.random() < 0.18) { p.letterDay = G.day; say(G, p.id, rnd(LETTER_LINES), { letter: true }); }
+        if (!p.appealUsed && prez && Math.random() < 0.15) dispatch(G, p, { t: 'appeal', text: rnd(APPEAL_LINES) }, now);
+        return r(8000, 16000);
+      }
+      if (ph === 'DECISION' && p.id === G.presidentId && !G.decided) { botDecide(G, p, now); return 0; }
+      if (Math.random() < 0.7) say(G, p.id, rnd(SIDANG_LINES).replace('{s}', c ? P(G, c.suspect).name : rnd(G.players).name).replace('{p}', prez ? prez.name : 'Presiden'));
+      if (ph === 'SIDANG' && p.id !== G.presidentId && prez && !G.sigs[p.id] && Math.random() < 0.1) dispatch(G, p, { t: 'sign', on: true }, now);
+      if (p.role === 'GURU_BESAR' && !G.expertUsed && c && Math.random() < 0.3) dispatch(G, p, { t: 'testify' }, now);
+      if (ph === 'SIDANG' && !G.skip[p.id] && now - G.phaseStart > 40000 && Math.random() < 0.4) dispatch(G, p, { t: 'skip' }, now);
+      return r(7000, 15000);
+    }
+    return 0;
+  }
+  function botDecide(G, p, now) {
+    const rep = G.expertReport || {}, prisoners = G.players.filter((x) => x.jailed);
+    let oc = openCases(G);
+    if (oc.length && G.vetoAvailable && !isDark(p)) {
+      const fit = oc.find((c) => c.kind === 'FITNAH');
+      if (fit && (rep[fit.suspect] === 'REFORMIS' || Math.random() < 0.15)) { doVeto(G, fit.id, now); oc = openCases(G); }
+    }
+    let kind = 'STATUS_QUO', pid = null;
+    if (oc.length) {
+      const kpk = oc.find((c) => c.kind === 'KPK'), fit = oc.find((c) => c.kind === 'FITNAH');
+      if (isDark(p)) { const t = oc.find((c) => !isDark(P(G, c.suspect))); if (t && Math.random() < 0.85) { kind = 'JAIL'; pid = t.suspect; } }
+      else {
+        const proven = oc.find((c) => rep[c.suspect] === 'GELAP');
+        if (proven) { kind = 'JAIL'; pid = proven.suspect; }
+        else if (kpk && Math.random() < 0.8) { kind = 'JAIL'; pid = kpk.suspect; }
+        else if (fit && rep[fit.suspect] !== 'REFORMIS' && Math.random() < 0.5) { kind = 'JAIL'; pid = fit.suspect; }
+      }
+    }
+    if (kind === 'STATUS_QUO' && prisoners.length && Math.random() < 0.3) {
+      kind = 'FREE'; const ap = G.appeals.map((a) => a.from).filter((id) => P(G, id).jailed);
+      pid = ap.length ? ap[0] : rnd(prisoners).id;
+      if (isDark(p)) { const d = prisoners.find(isDark); if (d) pid = d.id; }
+    }
+    applyDecision(G, kind, pid, now);
+  }
+
+  // ----------------------------------------------------------------- VIEWS
+  function publicView(G, now) {
+    now = now || Date.now();
+    const end = G.phase === 'END', e = G.election;
+    return {
+      code: G.code, rev: G.rev, now, phase: G.phase, endsAt: G.endsAt, phaseDur: G.phaseDur, phaseStart: G.phaseStart, locked: !!G.pending,
+      day: G.day, creatorId: G.creatorId, settings: G.settings, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
+      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
+      scandal: G.scandal, presidentId: G.presidentId, term: G.term, vetoAvailable: G.vetoAvailable, plt: !!G.plt,
+      cases: G.cases.map((c) => ({ id: c.id, kind: c.kind, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
+      election: e ? { cands: e.cands, visi: e.visi, reason: e.reason, done: e.done, votesIn: Object.keys(e.votes).length, voters: electionVoters(G).length } : null,
+      impeach: impeachNumbers(G), skip: { n: Object.keys(G.skip).length, need: Math.ceil(free(G).filter(active).length * 0.6) },
+      nightIn: G.phase === 'NIGHT' ? Object.keys(G.nightActs).length : 0, nightTotal: G.phase === 'NIGHT' ? free(G).length : 0,
+      news: G.news, fx: G.fx, chat: G.chat.slice(-60), decided: G.decided, carryover: G.carryover, pendingDecision: G.pendingDecision, expertUsed: G.expertUsed,
+      winner: G.winner, reason: G.reason, history: end ? G.history : [], stats: end ? G.stats : {},
+    };
+  }
+  function privateView(G, pid) {
+    const me = P(G, pid); if (!me) return null;
+    const dark = isDark(me), r = me.role;
+    const v = {
+      id: pid, role: r, faction: r ? (dark ? 'GELAP' : 'REFORMIS') : null, notes: G.notes[pid] || [],
+      nightAct: G.nightActs[pid] || null, myVote: G.election && G.election.votes[pid] != null ? G.election.votes[pid] : null,
+      signed: !!G.sigs[pid], skipped: !!G.skip[pid], letterUsed: me.letterDay === G.day, headlineRight: me.headlineRight,
+    };
+    if (dark && r) {
+      v.allies = G.players.filter((p) => p.id !== pid && isDark(p)).map((p) => ({ id: p.id, role: p.role }));
+      v.dark = G.dark.slice(-40); v.darkTerms = G.darkTerms; v.korChoice = G.korChoice;
+      v.scandalActor = !me.jailed && scandalActors(G).some((p) => p.id === pid); v.plt = v.scandalActor && r !== 'KORUPTOR';
+      if (v.scandalActor) v.hand = G.hand;
+    }
+    if (r === 'KPK') v.investigations = G.investigations[pid] || [];
+    if (r === 'PENGAMAT') v.observations = G.observations[pid] || [];
+    if (r === 'JURNALIS') v.lastProtected = G.lastProtected[pid] == null ? null : G.lastProtected[pid];
+    if (r === 'BROKER') v.recruitAvailable = !G.recruitUsed;
+    if (r === 'GURU_BESAR') v.expertUsed = G.expertUsed;
+    if (pid === G.presidentId) v.president = { vetoAvailable: G.vetoAvailable, appeals: G.appeals, expertReport: G.expertReport };
+    return v;
+  }
+
+  const Engine = {
+    MAX_DAYS,
+    create, join, act, tick, setConnected, publicView, privateView, distCounts,
+    DATA: { PERSONAS, ROLES, WIN_TEXT, DIST, DIST_KEYS, NINE_PLUS, CARDS, DARK_ROLES, MIN_PLAYERS, MAX_PLAYERS },
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* Mode latihan: mesin berjalan di browser ini, semua lawan adalah bot. */
+window.makeLocalPlay = function () {
+  let G = null, timer = null;
+  const push = () => { if (!G) return; window.APP.onState(Engine.publicView(G, Date.now()), Engine.privateView(G, 'me')); };
+  return {
+    async start({ name, persona }) {
+      const now = Date.now();
+      G = Engine.create('LATIH', 'me', now); Engine.join(G, 'me', { name, persona }, now);
+      for (let i = 0; i < 7; i++) Engine.act(G, 'me', { t: 'addBot' }, now);
+      clearInterval(timer); timer = setInterval(() => { if (G && Engine.tick(G, Date.now())) push(); }, 250);
+      push(); return { ok: true };
+    },
+    async send(a) { if (!G) return { err: 'Tidak ada permainan.' }; const r = Engine.act(G, 'me', a, Date.now()); push(); return r; },
+    stop() { clearInterval(timer); G = null; },
+  };
+};
+
+</script>
+<script>
+/* Jalur B (Cloudflare): klien WebSocket ke Durable Object per room. Tidak ada pemain yang menjadi host. */
+(function () {
+  const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+  let token = LS.get('mdu_token'); if (!token || !/^[a-f0-9]{32}$/.test(token)) { token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''); LS.set('mdu_token', token); }
+  let ws = null, ready = false, backoff = 600, seq = 0, code = LS.get('mdu_code'), want = !!code, timer = null;
+  const waiters = {}, queue = [];
+  const local = window.makeLocalPlay();
+  const NET = window.NET = {
+    label: 'Cloudflare', status: 'online', active: 'remote',
+    init() { if (code) open(true); },
+    async local(info) { NET.active = 'local'; return local.start(info); },
+    async connect({ action, code: c, name, persona }) {
+      NET.active = 'remote'; close();
+      if (action === 'create') {
+        try { const r = await fetch('/api/create', { method: 'POST' }); const j = await r.json(); if (j.err) return j; c = j.code; }
+        catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+      }
+      code = c; want = true; open(false);
+      const r = await request({ t: 'join', name, persona });
+      if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} }
+      else { want = false; close(); code = null; }
+      return r;
+    },
+    send(a) { if (NET.active === 'local') return local.send(a); return request({ t: 'act', a }); },
+    leave() {
+      if (NET.active === 'local') { local.stop(); NET.active = 'remote'; return; }
+      want = false; LS.del('mdu_code'); setTimeout(close, 300); code = null; try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    },
+  };
+  function setStatus(s) { if (NET.status !== s) { NET.status = s; window.APP && window.APP.onStatus(); } }
+  function raw(m) { if (ws && ready) ws.send(JSON.stringify(m)); else queue.push(m); }
+  function request(m) { return new Promise((res) => { const id = ++seq; m.id = id; waiters[id] = res; raw(m); setTimeout(() => { if (waiters[id]) { delete waiters[id]; res({ err: 'Server tidak menjawab. Coba lagi.' }); } }, 12000); }); }
+  function close() { clearTimeout(timer); if (ws) { const w = ws; ws = null; ready = false; try { w.onclose = null; w.close(); } catch (e) {} } }
+  function open(rejoin) {
+    if (!code) return;
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/' + code;
+    let sock; try { sock = new WebSocket(url); } catch (e) { timer = setTimeout(() => open(true), backoff); return; }
+    ws = sock; ready = false;
+    sock.onopen = () => sock.send(JSON.stringify({ t: 'hello', token, rejoin: !!rejoin }));
+    sock.onmessage = (ev) => {
+      if (sock !== ws) return;
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.t === 'welcome') {
+        ready = true; backoff = 600; setStatus('online');
+        while (queue.length) sock.send(JSON.stringify(queue.shift()));
+        if (m.lost && NET.active === 'remote') { want = false; LS.del('mdu_code'); code = null; close(); window.APP.resetToLanding('Sidang sebelumnya sudah tidak tersedia.'); }
+        return;
+      }
+      if (m.t === 'reply') { const w = waiters[m.id]; if (w) { delete waiters[m.id]; w(m.res); } return; }
+      if (m.t === 'state' && NET.active === 'remote') { window.APP.onState(m.pub, m.priv); return; }
+      if (m.t === 'kicked' && NET.active === 'remote') { want = false; LS.del('mdu_code'); code = null; close(); window.APP.resetToLanding(m.msg || 'Anda dikeluarkan dari room.'); }
+    };
+    sock.onclose = () => { if (sock !== ws) return; ready = false; ws = null; if (want && NET.active === 'remote') { setStatus('reconnecting'); timer = setTimeout(() => open(true), backoff); backoff = Math.min(8000, backoff * 1.7); } };
+    sock.onerror = () => { try { sock.close(); } catch (e) {} };
+  }
+})();
+
+</script>
+<script>
+/* Mondayunited States — klien UI multiplayer.
+ * Menampilkan view dari mesin (publik + privat). Tidak tahu transport apa yang dipakai:
+ * window.NET menyediakan connect(), send(), leave(), status.
+ */
+(function () {
+  'use strict';
+  const D = window.Engine.DATA;
+  const { PERSONAS, ROLES, WIN_TEXT, DIST_KEYS, NINE_PLUS, CARDS } = D;
+  const TICKER = 'Rapat ditunda karena makan siang • Harga cabai naik, survei kepuasan juga naik • Klarifikasi menyusul setelah viral • Netizen: "sudah kuduga" • Proyek strategis nasional resmi jadi wacana strategis nasional • ';
+  const NIGHT_BANNERS = ['Malam hari sedang berlangsung… Tikus berdasi sedang beraksi.', 'Lampu ruang rapat masih menyala. Padahal katanya reses.', 'Ada amplop cokelat berpindah tangan di parkiran.', 'Rekaman CCTV gedung sedang "rusak".', 'Sinyal hilang di ruang fraksi. Kebetulan.'];
+  const SURVEY = [
+    { q: 'Seberapa puas Anda dengan janji kampanye?', o: ['Puas di brosur', 'Lumayan wacana', 'Apa itu janji?'] },
+    { q: 'Infrastruktur favorit Anda?', o: ['Jalan berlubang', 'Jembatan selfie', 'Proyek mangkrak'] },
+    { q: 'Kanal pengaduan pilihan?', o: ['Viral dulu', 'Kotak saran (digembok)', 'Pasrah'] },
+  ];
+  const DISERTASI = ['Pengaruh Rebahan terhadap Produktivitas ASN', 'Studi Kasus: Rapat yang Bisa Jadi Email', 'Analisis Wacana Spanduk Ucapan Selamat'];
+  const REACTS = ['🤔', '🙄', '🔥', '🧂', '😂', '👏'];
+  const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+
+  // ------------------------------------------------------------ STATE
+  let V = null, M = null, offset = 0;
+  const U = {
+    screen: 'LANDING', mode: 'create', joinCode: ['', '', '', ''], nick: LS.get('mdu_nick') || '', persona: LS.get('mdu_persona') || null,
+    flipped: false, sel: { target: null, card: null, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: '' },
+    modal: null, toast: null, toastT: 0, seenFx: 0, fxShow: null, seenNotes: +(LS.get('mdu_seen_notes') || 0), mobileTab: 'chat', presDrawer: true, prisonerPick: null,
+    busy: false, err: '', wall: 0, lastNewsId: 0, newsSkipped: 0, bannerIdx: 0,
+  };
+  const now = () => Date.now() + offset;
+  const P = (id) => (V ? V.players.find((p) => p.id === id) : null);
+  const me = () => (M ? P(M.id) : null);
+  const persona = (id) => PERSONAS.find((x) => x.id === id) || PERSONAS[0];
+  const card = (id) => CARDS.find((c) => c.id === id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const isPres = () => V && M && V.presidentId === M.id;
+  const isDarkMe = () => M && M.faction === 'GELAP';
+  const free = () => V.players.filter((p) => !p.jailed);
+  const openCases = () => (V.cases || []).filter((c) => c.open);
+
+  // ------------------------------------------------------- NET HOOKS
+  function onState(pub, priv) {
+    if (pub) {
+      const prevPhase = V && V.phase, prevDay = V && V.day;
+      V = pub; offset = pub.now - Date.now();
+      const key = pub.phase + ':' + pub.day + ':' + (pub.election ? pub.election.cands.join() : '');
+      if (U.sel.phaseKey !== key) { U.sel = { target: null, card: null, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: key }; U.prisonerPick = null; U.presDrawer = true; U.wall = 0; }
+      if (prevPhase !== pub.phase) { if (pub.phase === 'REVEAL') U.flipped = false; window.scrollTo(0, 0); }
+      if (pub.fx && pub.fx.id !== U.seenFx) { U.seenFx = pub.fx.id; if (now() < pub.fx.at + pub.fx.dur) { U.fxShow = pub.fx; setTimeout(() => { if (U.fxShow && U.fxShow.id === pub.fx.id) { U.fxShow = null; renderOverlay(); } }, Math.max(400, pub.fx.at + pub.fx.dur - now())); } }
+      if (prevDay !== pub.day) U.letterSent = false;
+    }
+    if (priv !== undefined) {
+      M = priv;
+      if (M && M.notes) { const fresh = M.notes.filter((n) => n.id > U.seenNotes); if (fresh.length) { U.seenNotes = fresh[fresh.length - 1].id; LS.set('mdu_seen_notes', U.seenNotes); fresh.forEach((n, i) => setTimeout(() => toast(n.text, n.tone), i * 1600)); } }
+    }
+    if (V && M) U.screen = 'GAME';
+    render();
+  }
+  function onStatus() { renderOverlay(); }
+  async function send(a) {
+    try { const r = await window.NET.send(a); if (r && r.err) toast('⚠️ ' + r.err, 'korup'); return r; }
+    catch (e) { toast('⚠️ Gagal mengirim. Cek koneksi.', 'korup'); return { err: String(e) }; }
+  }
+  window.APP = { onState, onStatus, toast: (t, tone) => toast(t, tone), resetToLanding };
+
+  function resetToLanding(msg) { V = null; M = null; U.screen = 'LANDING'; U.busy = false; if (msg) U.err = msg; render(); }
+  function toast(text, tone) { U.toast = { text, tone: tone || 'zinc', id: Date.now() + Math.random() }; const id = U.toast.id; renderOverlay(); setTimeout(() => { if (U.toast && U.toast.id === id) { U.toast = null; renderOverlay(); } }, 3600); }
+
+  // ------------------------------------------------------- PRIMITIVES
+  const btn = (v) => ({
+    primary: 'bg-zinc-100 text-ink hover:bg-white', korup: 'bg-korup text-white shadow-neon-korup hover:brightness-110',
+    reform: 'bg-reform text-ink shadow-neon-reform hover:brightness-110', istana: 'bg-istana text-ink shadow-neon-istana hover:brightness-110',
+    ghost: 'bg-white/5 text-zinc-200 ring-1 ring-white/10 hover:bg-white/10',
+  }[v]) + ' inline-flex items-center justify-center gap-2 h-12 px-5 rounded-xl font-semibold transition active:scale-[.98] disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-istana';
+  const facBadge = (f) => f === 'GELAP'
+    ? '<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-korup-soft text-korup ring-1 ring-korup/30">● FAKSI GELAP</span>'
+    : '<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-reform-soft text-reform ring-1 ring-reform/30">● REFORMIS</span>';
+  const sectionTitle = (t) => `<h3 class="text-[11px] font-semibold uppercase tracking-[.2em] text-zinc-400">${t}</h3>`;
+  const ticker = (cls) => `<div class="overflow-hidden whitespace-nowrap bg-berita text-ink font-semibold text-sm py-1.5 ${cls || ''}"><span class="ticker">${TICKER.repeat(2)}</span></div>`;
+  const nm = (p) => esc(p ? p.name : '?');
+  const tag = (p) => (p && p.bot ? ' <span class="text-[10px] text-zinc-500">🤖</span>' : '') + (p && !p.bot && !p.connected ? ' <span class="text-[10px] text-zinc-500" title="terputus">📴</span>' : '');
+  function avatar(p, size, extra) {
+    const isP = V && p.id === V.presidentId;
+    return `<div class="relative ${size || 'size-12'} shrink-0 rounded-2xl grid place-items-center text-2xl bg-ink-700 ring-2 ${isP ? 'ring-istana shadow-neon-istana' : 'ring-white/10'} ${p.jailed ? 'grayscale opacity-50' : ''} ${extra || ''}">${persona(p.persona).e}${isP ? '<span class="absolute -top-2 -right-2 text-sm">👑</span>' : ''}${p.jailed ? '<span class="absolute -bottom-1 -right-1 text-xs bg-ink rounded px-0.5">⛓</span>' : ''}</div>`;
+  }
+  function timerRing(color, size) {
+    size = size || 56;
+    return `<div class="relative shrink-0" style="width:${size}px;height:${size}px"><svg viewBox="0 0 36 36" class="w-full h-full -rotate-90"><circle cx="18" cy="18" r="16" fill="none" class="stroke-white/10" stroke-width="3"/><circle data-timer-ring cx="18" cy="18" r="16" fill="none" class="${color}" stroke-width="3" stroke-linecap="round" stroke-dasharray="100.5" stroke-dashoffset="0"/></svg><span data-timer class="absolute inset-0 grid place-items-center font-mono ${size < 56 ? 'text-[10px]' : 'text-sm'} tabular-nums">--</span></div>`;
+  }
+  function scandalMeter(label) {
+    // Hari menuju batas 20 (kemenangan Faksi Gelap) + jumlah skandal yang lolos
+    const M20 = window.Engine.MAX_DAYS || 20, d = Math.min(V.day, M20);
+    return `<div class="flex items-center gap-3">${label !== false ? '<span class="text-[11px] font-semibold uppercase tracking-[.2em] text-zinc-400">Hari</span>' : ''}<div class="flex gap-[2px] flex-1">${Array.from({ length: M20 }, (_, i) => `<div class="h-2 flex-1 min-w-[3px] rounded-sm ${i < d ? (i >= 15 ? 'bg-korup shadow-neon-korup' : 'bg-berita') : 'bg-white/10'}"></div>`).join('')}</div><span class="font-mono text-sm text-berita tabular-nums">${d}/${M20}</span><span class="font-mono text-xs text-korup" title="Skandal yang lolos">🔥${V.scandal}</span></div>`;
+  }
+
+  // ------------------------------------------------------- LANDING
+  function scrLanding() {
+    const hasLocal = !!window.NET.local;
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 grid place-items-center px-6 py-12 relative overflow-hidden">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ff2e4d1f,transparent_55%),radial-gradient(ellipse_at_bottom_right,#f5c54214,transparent_50%)]"></div>
+      <div class="relative w-full max-w-md text-center rise">
+        <p class="font-mono text-xs tracking-[.3em] text-zinc-500 mb-4">SIDANG NO. 01/2026 • RAHASIA NEGARA</p>
+        <h1 class="font-display uppercase leading-[.85] text-6xl sm:text-7xl text-white">Mondayunited<br><span class="text-korup glitch inline-block">States</span></h1>
+        <p class="mt-4 text-zinc-400">Sidang dimulai. Siapa yang masuk angin?</p>
+        <div class="mt-10 space-y-4">
+          <button data-a="goCreate" class="${btn('istana')} w-full h-14 text-lg">🏛️ Buat Room Baru</button>
+          <div class="flex items-center gap-3 text-xs text-zinc-500 uppercase tracking-widest"><span class="h-px flex-1 bg-white/10"></span>atau gabung<span class="h-px flex-1 bg-white/10"></span></div>
+          <div class="flex items-center justify-center gap-2">
+            ${U.joinCode.map((d, i) => `<input data-otp="${i}" inputmode="numeric" maxlength="1" value="${d}" aria-label="Digit ${i + 1} kode room" class="size-14 sm:size-16 rounded-xl bg-ink-800 ring-1 ring-white/15 text-center font-mono text-3xl text-istana focus:ring-2 focus:ring-istana outline-none">`).join('')}
+            <button data-a="goJoin" class="${btn('ghost')} h-14 sm:h-16 px-4">Masuk →</button>
+          </div>
+          <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
+          ${hasLocal ? '<button data-a="goLocal" class="w-full text-sm text-zinc-400 hover:text-white underline underline-offset-4">🎮 Latihan solo melawan bot (offline)</button>' : ''}
+        </div>
+        <p class="mt-8 text-xs text-zinc-600">6–12 pemain • ${esc(window.NET.label || '')}</p>
+      </div>
+    </main></div>`;
+  }
+  function scrIdentity() {
+    const sel = U.persona ? persona(U.persona) : null;
+    const title = U.mode === 'join' ? `Gabung ke Room #${U.joinCode.join('')}` : U.mode === 'local' ? 'Latihan Solo' : 'Buat Room Baru';
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 px-5 py-10"><div class="w-full max-w-xl mx-auto rise">
+      <p class="text-xs uppercase tracking-[.2em] text-zinc-400">Formulir Daftar Hadir • ${title}</p>
+      <h2 class="font-display text-4xl uppercase mt-2">Siapa Anda?</h2>
+      <label class="block mt-6 text-sm text-zinc-400" for="nick">Nama panggilan</label>
+      <div class="relative mt-1"><input id="nick" maxlength="14" value="${esc(U.nick)}" placeholder="mis. Bambang" autocomplete="off" class="w-full h-12 rounded-xl bg-ink-800 ring-1 ring-white/15 px-4 text-lg focus:ring-2 focus:ring-istana outline-none">
+        <span id="nickCount" class="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-xs text-zinc-500">${U.nick.length}/14</span></div>
+      <p class="block mt-6 text-sm text-zinc-400">Pilih persona <span class="text-zinc-600">(kosmetik; jika sudah dipakai orang lain, diganti otomatis)</span></p>
+      <div role="radiogroup" class="mt-2 grid grid-cols-4 sm:grid-cols-6 gap-2">
+        ${PERSONAS.map((p) => `<button role="radio" aria-checked="${U.persona === p.id}" data-a="persona" data-v="${p.id}" title="${p.n}" class="aspect-square rounded-2xl bg-ink-800 ring-1 ring-white/10 text-3xl hover:ring-white/30 transition aria-checked:ring-2 aria-checked:ring-istana aria-checked:bg-istana-soft">${p.e}</button>`).join('')}
+      </div>
+      <p class="mt-3 min-h-10 text-sm">${sel ? `<b class="text-istana">${sel.n}</b> <span class="text-zinc-400 italic">“${sel.t}”</span>` : '<span class="text-zinc-600">Belum memilih persona.</span>'}</p>
+      <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
+      <button data-a="enter" class="${btn('primary')} w-full mt-2" ${U.persona && U.nick.trim() && !U.busy ? '' : 'disabled'}>${U.busy ? '⏳ Menghubungkan…' : '📝 Daftar Hadir'}</button>
+      <button data-a="back" class="mt-3 w-full text-sm text-zinc-500 hover:text-zinc-300">← Kembali</button>
+    </div></main></div>`;
+  }
+  function scrLobby() {
+    const creator = M.id === V.creatorId, n = V.players.length, dc = V.dist || { d: [], dark: 0, ref: 0, warga: 0, valid: false };
+    const s = V.settings, ok = dc.valid;
+    const stepper = (i, v, min, max, dis) => `<div class="inline-flex items-center rounded-xl ring-1 ring-white/10 ${dis ? 'opacity-40 pointer-events-none' : ''}"><button data-a="dist" data-k="${i}" data-v="-1" class="size-9 hover:bg-white/10 rounded-l-xl" ${v <= min ? 'disabled' : ''} aria-label="kurangi">−</button><span class="w-8 text-center font-mono">${v}</span><button data-a="dist" data-k="${i}" data-v="1" class="size-9 hover:bg-white/10 rounded-r-xl" ${v >= max ? 'disabled' : ''} aria-label="tambah">+</button></div>`;
+    const choice = (key, vals, cur, fmt) => `<div class="flex gap-1">${vals.map((v) => `<button data-a="setOpt" data-k="${key}" data-v="${v}" ${creator ? '' : 'disabled'} class="h-8 px-2.5 rounded-lg text-xs font-mono ${cur === v ? 'bg-istana text-ink' : 'bg-white/5 text-zinc-300'} disabled:opacity-60">${fmt ? fmt(v) : v}</button>`).join('')}</div>`;
+    const chat = V.chat.slice(-6);
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 grid gap-6 md:grid-cols-[1fr_380px]">
+      <section class="rise">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div><p class="text-xs uppercase tracking-[.2em] text-zinc-400">Ruang Tunggu DPR</p><h2 class="font-display text-4xl uppercase">Menunggu Peserta</h2></div>
+          <button data-a="copyCode" class="group flex items-center gap-3 rounded-2xl bg-ink-800 ring-1 ring-istana/30 px-4 py-2 hover:ring-istana"><span class="font-mono text-3xl tracking-[.3em] text-istana">${esc(V.code)}</span><span class="text-xs text-zinc-400 group-hover:text-istana">⧉ Salin</span></button>
+        </div>
+        <p class="mt-2 text-sm text-zinc-400"><span class="font-mono text-zinc-200">${n}/12</span> hadir • minimal 6 untuk memulai${creator ? ' • kurang orang? tambahkan bot' : ''}</p>
+        <div class="mt-5 grid grid-cols-3 sm:grid-cols-4 gap-3">
+          ${V.players.map((p) => `<div class="relative rounded-2xl bg-ink-800 ring-1 ${p.id === M.id ? 'ring-istana/50' : 'ring-white/10'} p-3 flex flex-col items-center gap-1 rise">
+              ${p.id === V.creatorId ? '<span class="absolute -top-2 -right-2 text-[10px] rounded-full bg-istana text-ink px-1.5 font-bold">PALU</span>' : ''}
+              ${creator && p.id !== M.id ? `<button data-a="kick" data-v="${esc(p.id)}" class="absolute top-1 left-1 size-6 rounded-md text-xs text-zinc-500 hover:bg-korup hover:text-white" title="Keluarkan">✕</button>` : ''}
+              <div class="text-3xl">${persona(p.persona).e}</div><div class="font-semibold truncate max-w-full">${nm(p)}${tag(p)}${p.id === M.id ? ' <span class="text-xs text-istana">(Anda)</span>' : ''}</div>
+              <div class="text-[11px] text-zinc-500 truncate max-w-full">${persona(p.persona).n}</div></div>`).join('')}
+          ${creator && n < 12 ? '<button data-a="addBot" class="rounded-2xl border-2 border-dashed border-white/15 grid place-items-center text-sm text-zinc-400 hover:text-white hover:border-istana/60 min-h-[104px]">🤖 + Tambah Bot</button>' : ''}
+        </div>
+        <div class="mt-6 rounded-2xl bg-ink-800/60 ring-1 ring-white/5 p-4">
+          ${sectionTitle('Ganti persona Anda')}
+          <div class="mt-2 flex flex-wrap gap-1.5">${PERSONAS.map((p) => { const taken = V.players.some((x) => x.persona === p.id && x.id !== M.id); return `<button data-a="lobbyPersona" data-v="${p.id}" ${taken ? 'disabled' : ''} class="size-10 rounded-xl text-xl ${me().persona === p.id ? 'bg-istana-soft ring-2 ring-istana' : 'bg-white/5'} disabled:opacity-20">${p.e}</button>`; }).join('')}</div>
+        </div>
+        <div class="mt-4 rounded-2xl bg-ink-800/60 ring-1 ring-white/5 p-4">
+          ${sectionTitle('💬 Obrolan Lobi')}
+          <div class="mt-2 space-y-1 text-sm max-h-40 overflow-y-auto" data-scroll-key="lobbychat" data-autoscroll>${chat.map(chatLine).join('') || '<p class="text-xs text-zinc-600">Belum ada obrolan.</p>'}</div>
+          <form data-form="chat" class="mt-2 flex gap-2"><input id="chatInput" name="t" maxlength="200" autocomplete="off" placeholder="Sapa peserta lain…" class="flex-1 h-10 rounded-xl bg-ink-800 px-3 text-sm outline-none focus:ring-1 focus:ring-istana"><button class="${btn('ghost')} h-10 px-3">➤</button></form>
+        </div>
+      </section>
+      <aside class="rounded-2xl bg-ink-800/80 ring-1 ring-white/10 p-5 h-fit md:sticky md:top-6 rise">
+        ${sectionTitle('Pengaturan Sidang' + (creator ? ' • Anda pemegang palu' : ''))}
+        <div class="mt-4 flex items-center justify-between"><span>Distribusi role</span>
+          <button data-a="autoDist" role="switch" aria-checked="${s.auto}" ${creator ? '' : 'disabled'} class="relative h-7 w-14 rounded-full transition ${s.auto ? 'bg-reform' : 'bg-white/15'} disabled:opacity-60"><span class="absolute top-1 ${s.auto ? 'left-8' : 'left-1'} size-5 rounded-full bg-ink transition-all"></span></button></div>
+        <p class="text-xs text-zinc-500 mt-1">${s.auto ? 'Otomatis mengikuti jumlah pemain.' : 'Manual — Warga Sipil mengisi sisa kursi.'}</p>
+        <div class="mt-3 divide-y divide-white/5">
+          ${DIST_KEYS.map((k, i) => { const locked = NINE_PLUS.includes(k) && n < 9; const v = dc.d[i] || 0; return `<div class="flex items-center justify-between py-2 ${locked ? 'opacity-40' : ''}"><span class="${ROLES[k].fac === 'GELAP' ? 'text-korup' : 'text-reform'}">${ROLES[k].icon} ${ROLES[k].title}${NINE_PLUS.includes(k) ? ' <span class="text-[10px] text-zinc-500">9+</span>' : ''}</span>${locked ? '<span class="text-xs text-zinc-500 w-[106px] text-center">🔒 buka di 9+</span>' : stepper(i, v, k === 'KORUPTOR' ? 1 : 0, NINE_PLUS.includes(k) ? 1 : 3, s.auto || !creator)}</div>`; }).join('')}
+          <div class="flex items-center justify-between py-2"><span class="text-reform">🧍 Warga Sipil</span><span class="font-mono w-[106px] text-center ${dc.warga < 0 ? 'text-korup' : ''}">= ${dc.warga}</span></div>
+        </div>
+        <div class="mt-4"><div class="flex justify-between text-xs mb-1"><span class="text-korup">Gelap ${dc.dark}</span><span class="text-reform">Reformis ${dc.ref}</span></div>
+          <div class="h-2 rounded-full bg-reform overflow-hidden"><div class="h-full bg-korup" style="width:${n ? (dc.dark / n) * 100 : 0}%"></div></div>
+          <p class="text-xs mt-2 ${ok ? 'text-zinc-500' : 'text-berita'}">${n < 6 ? `⚠ Butuh ${6 - n} pemain lagi.` : ok ? '✓ Komposisi seimbang.' : '⚠ Faksi Gelap harus lebih sedikit dari Reformis, minimal 1 Koruptor.'}</p></div>
+        <div class="mt-4 space-y-2 text-xs text-zinc-400">
+          <div class="flex items-center justify-between gap-2"><span>🌙 Malam</span>${choice('night', [30, 45, 60], s.timers.night, (v) => v + 's')}</div>
+          <div class="flex items-center justify-between gap-2"><span>🏛️ Sidang</span>${choice('sidang', [60, 120, 180, 300], s.timers.sidang, (v) => v / 60 + 'm')}</div>
+        </div>
+        ${creator ? `<button data-a="start" class="${btn('istana')} w-full h-14 text-lg mt-5 ${ok ? 'pulse-gold' : ''}" ${ok ? '' : 'disabled'}>MULAI SIDANG ▶</button>` : '<p class="mt-5 text-center text-sm text-zinc-400">⏳ Menunggu pemegang palu memulai sidang…</p>'}
+        <button data-a="leave" class="mt-3 w-full text-xs text-zinc-500 hover:text-korup">Keluar dari room</button>
+      </aside>
+    </main></div>`;
+  }
+
+  // ------------------------------------------------------- REVEAL
+  function roleCardFront(r, big) {
+    const R = ROLES[r], dark = R.fac === 'GELAP';
+    return `<div class="${big ? 'face face-front absolute inset-0' : ''} rounded-3xl p-6 flex flex-col ring-2 ${dark ? 'ring-korup shadow-neon-korup bg-gradient-to-b from-korup/30 to-ink-900' : 'ring-reform shadow-neon-reform bg-gradient-to-b from-reform/25 to-ink-900'}">
+      <div class="text-5xl">${R.icon}</div><h2 class="font-display text-4xl sm:text-5xl uppercase mt-2 leading-none ${dark ? 'text-korup' : 'text-reform'}">${R.title}</h2>
+      <div class="h-px bg-white/15 my-4"></div><p class="text-sm text-zinc-200 leading-relaxed">${R.desc}</p>
+      <p class="mt-auto pt-3 text-xs text-zinc-400"><b class="text-zinc-200">MENANG:</b> ${WIN_TEXT[R.fac]}</p></div>`;
+  }
+  function allyBox() {
+    if (!M.allies || !M.allies.length) return '';
+    return `<div class="rounded-xl bg-korup-soft ring-1 ring-korup/30 p-3"><p class="text-xs text-korup font-semibold uppercase tracking-widest">Rekan satu sindikat</p>
+      <div class="mt-2 flex flex-wrap gap-2">${M.allies.map((a) => { const p = P(a.id); return `<span class="inline-flex items-center gap-1.5 rounded-full bg-ink/60 px-2 py-1 text-sm">${persona(p.persona).e} ${nm(p)} <span class="text-korup text-xs">${ROLES[a.role].title}</span></span>`; }).join('')}</div></div>`;
+  }
+  function scrReveal() {
+    const r = ROLES[M.role], dark = r.fac === 'GELAP', readyN = V.players.filter((p) => p.ready).length, mine = me();
+    return `<div class="min-h-screen bg-ink flex justify-center"><div class="w-full max-w-sm min-h-screen flex flex-col items-center justify-between px-6 py-8">
+      <div class="text-center"><p class="font-mono text-xs tracking-[.3em] text-zinc-500">AMPLOP RAHASIA #${esc(V.code)}</p>
+        <div class="mt-2 text-sm text-zinc-400">${U.flipped ? facBadge(r.fac) : 'Amplop dari Istana telah tiba. Pastikan tidak ada yang mengintip.'}</div></div>
+      <div class="flip-wrap my-6"><div id="roleCard" class="flip-card relative w-[min(78vw,300px)] aspect-[2.5/3.5]" data-flipped="${U.flipped}">
+        <div class="face absolute inset-0 rounded-3xl bg-kertas text-ink grid place-items-center overflow-hidden" style="background-image:repeating-linear-gradient(45deg,transparent 0 10px,#0000000d 10px 11px)">
+          <div class="text-center"><div class="mx-auto size-24 rounded-full bg-korup grid place-items-center text-4xl shadow-[inset_0_-6px_0_#0003] text-white font-display">MS</div><p class="mt-4 font-display text-2xl tracking-wider">RAHASIA NEGARA</p><p class="text-xs font-mono mt-1 opacity-60">JANGAN DIBUKA DI DEPAN UMUM</p></div></div>
+        ${roleCardFront(M.role, true)}
+      </div></div>
+      <div class="w-full ${U.flipped ? '' : 'hidden'}">${allyBox()}
+        <div class="mt-3 rounded-xl bg-white/5 ring-1 ring-white/10 p-3 text-sm"><span class="text-zinc-400">Aksi spesial:</span> <b>${r.action || '— Tugas Anda: berdebat di Sidang'}</b></div>
+        <div class="mt-4 grid grid-cols-[auto_1fr] gap-2"><button data-a="hideCard" class="${btn('ghost')}">Tutup</button>
+          <button data-a="ready" class="${btn(dark ? 'korup' : 'reform')}" ${mine.ready ? 'disabled' : ''}>${mine.ready ? '✓ Menunggu yang lain…' : 'SIAP / LANJUT ▶'}</button></div></div>
+      <div class="flex flex-col items-center gap-3 ${U.flipped ? 'hidden' : ''}">
+        <button id="holdBtn" class="relative overflow-hidden select-none touch-none h-14 px-8 rounded-full ring-1 ring-white/20 bg-white/5 font-semibold"><span class="hold-fill absolute inset-0 bg-istana/40"></span><span class="relative">✋ Tekan &amp; tahan untuk membuka</span></button>
+        <p class="text-xs text-zinc-500">Tahan ±0,6 detik agar tidak salah tekan</p></div>
+      <div class="mt-6 flex items-center gap-2 font-mono text-sm text-zinc-400"><div class="flex gap-1">${V.players.map((p) => `<span class="size-2 rounded-full ${p.ready ? 'bg-reform' : 'bg-zinc-700'}"></span>`).join('')}</div>${readyN}/${V.players.length} siap</div>
+    </div></div>`;
+  }
+
+  // ------------------------------------------------------- ELECTION
+  function scrElection() {
+    const e = V.election, mine = me(), isCand = e.cands.includes(M.id), myVote = M.myVote;
+    const title = { awal: 'Pemilu Perdana', habis: 'Pemilu Periode Baru', makzul: 'Pemilu Kilat', kosong: 'Pemilu Kilat' }[e.reason] || 'Pemilu';
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 w-full max-w-4xl mx-auto px-5 py-8 grid gap-6 md:grid-cols-[1fr_300px]"><section>
+      <div class="flex items-center justify-between gap-4"><div><p class="text-xs uppercase tracking-[.2em] text-istana">🗳️ ${title}</p><h2 class="font-display text-4xl uppercase">Coblos Presiden</h2>
+        <p class="text-sm text-zinc-400 mt-1">Masa jabatan 2 putaran. Kandidat diundi KPU secara acak.</p>
+        ${V.pendingDecision ? '<p class="mt-2 inline-block rounded-lg bg-korup-soft text-korup ring-1 ring-korup/30 px-2 py-1 text-xs">📁 Keppres ditunda, menunggu Presiden baru</p>' : ''}</div>${timerRing('stroke-istana', 64)}</div>
+      <div class="mt-8 grid grid-cols-[1fr_auto_1fr] items-stretch gap-3">
+        ${e.cands.map((cid, i) => { const c = P(cid), sel = myVote === cid; return `${i === 1 ? '<div class="grid place-items-center font-display text-3xl text-zinc-600">VS</div>' : ''}
+          <div class="overflow-hidden rounded-2xl bg-ink-800 ring-1 ${sel ? 'ring-2 ring-istana shadow-neon-istana' : 'ring-white/10'} p-4 text-center flex flex-col">
+            <div class="reel text-5xl" style="animation-delay:${i * 0.2}s">${persona(c.persona).e}</div>
+            <div class="mt-2 font-display text-2xl uppercase break-words">${nm(c)}${cid === M.id ? ' <span class="text-xs font-sans text-istana">(Anda)</span>' : ''}</div>
+            <div class="text-xs text-zinc-500">${persona(c.persona).n}${tag(c)}</div><p class="mt-2 text-xs italic text-zinc-400">Visi: “${esc(e.visi[cid])}”</p>
+            ${!isCand && !e.done ? `<button data-a="vote" data-v="${esc(cid)}" class="${btn(sel ? 'istana' : 'ghost')} h-11 w-full mt-4">${sel ? '✓ Dicoblos' : 'Coblos'}</button>` : ''}</div>`; }).join('')}
+      </div>
+      ${isCand ? '<div class="mt-6 rounded-xl bg-istana-soft ring-1 ring-istana/30 p-4 text-sm">🎤 <b>Anda kandidat.</b> Kandidat tidak bisa mencoblos. Kampanyekan diri lewat chat.</div>' : ''}
+      ${mine.jailed ? '<div class="mt-6 rounded-xl bg-white/5 ring-1 ring-white/10 p-4 text-sm text-zinc-300">🗳️ <b>TPS Rutan.</b> Napi tetap punya hak pilih, tapi tidak bisa dicalonkan dan tidak bisa ikut demo.</div>' : ''}
+      <div class="mt-6"><div class="flex justify-between text-xs text-zinc-400 mb-1"><span>Suara masuk</span><span class="font-mono">${e.votesIn}/${e.voters}</span></div>
+        <div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full bg-istana transition-all" style="width:${e.voters ? (e.votesIn / e.voters) * 100 : 0}%"></div></div>
+        <p class="text-xs text-zinc-600 mt-2">Arah suara dirahasiakan. Hanya pemenang & total suara yang diumumkan.</p></div>
+    </section>
+    <aside>${chatPanel('Kampanye', 'h-[340px]')}</aside></main></div>`;
+  }
+
+  // ------------------------------------------------------- NIGHT
+  function targetList(opts) {
+    const selKey = opts.key || 'target', cur = U.sel[selKey];
+    const list = free().filter((p) => (opts.self || p.id !== M.id) && !(opts.exclude || []).includes(p.id));
+    if (!list.length) return '<p class="text-xs text-zinc-500">Tidak ada target yang tersedia.</p>';
+    return `<div class="flex gap-2 overflow-x-auto no-scrollbar snap-x pb-2" data-scroll-key="t-${selKey}" role="radiogroup">${list.map((p) => {
+      const dis = opts.disabled && opts.disabled(p), mark = opts.mark && opts.mark(p);
+      return `<button role="radio" aria-checked="${cur === p.id}" data-a="sel" data-k="${selKey}" data-v="${esc(p.id)}" ${dis ? 'disabled' : ''} class="snap-start shrink-0 w-20 rounded-xl bg-ink-800 ring-1 ring-white/10 p-2 text-center transition aria-checked:ring-2 ${opts.ring || 'aria-checked:ring-korup'} aria-checked:-translate-y-0.5 disabled:opacity-30">
+        <div class="text-2xl">${persona(p.persona).e}</div><div class="text-xs font-semibold truncate">${nm(p)}</div><div class="text-[10px] text-zinc-500 h-3 truncate">${dis ? opts.disLabel : mark || (p.id === V.presidentId ? '👑 Presiden' : '')}</div></button>`;
+    }).join('')}</div>`;
+  }
+  function cardPicker(key) {
+    const cur = U.sel[key];
+    return `<div class="flex gap-3 overflow-x-auto no-scrollbar snap-x pb-3 pt-1" data-scroll-key="cards-${key}" role="radiogroup">${(M.hand || []).map(card).map((k, i) => `<button role="radio" aria-checked="${cur === k.id}" data-a="sel" data-k="${key}" data-v="${k.id}" class="relative snap-start shrink-0 w-32 aspect-[3/4] rounded-xl bg-kertas text-ink p-3 text-left font-semibold leading-tight transition ${i % 2 ? 'rotate-1' : '-rotate-1'} aria-checked:ring-4 aria-checked:ring-korup aria-checked:-translate-y-1">
+      <span class="absolute top-2 right-2 text-[9px] text-korup border border-korup px-1 rotate-12 font-mono">RAHASIA</span><span class="block mt-5 text-sm">${k.title}</span><span class="absolute bottom-2 left-3 font-mono text-[10px] opacity-50">#${String(CARDS.indexOf(k) + 1).padStart(2, '0')}</span></button>`).join('')}</div>`;
+  }
+  const head = (icon, title, color) => `<div class="flex items-center gap-2 font-display text-2xl uppercase ${color}">${icon} ${title}</div>`;
+  function scandalForm(tk, ck, label) {
+    const t = U.sel[tk] != null ? P(U.sel[tk]) : null, c = card(U.sel[ck] || (M.hand || [])[0]);
+    const darkIds = [M.id].concat((M.allies || []).map((a) => a.id));
+    const kc = M.korChoice;
+    return `${kc ? `<div class="rounded-lg bg-korup-soft ring-1 ring-korup/30 px-3 py-2 text-xs">📌 Pilihan sindikat saat ini: <b>${nm(P(kc.target))}</b> • ${esc(card(kc.card).title)} <span class="text-zinc-400">(oleh ${nm(P(kc.by))}; pilihan terakhir yang dipakai)</span></div>` : ''}
+      <div class="mt-3">${sectionTitle('1 · Target')}<div class="mt-2">${targetList({ key: tk, exclude: darkIds, disabled: (p) => p.id === V.presidentId, disLabel: '👑 imun' })}</div></div>
+      <div class="mt-2">${sectionTitle('2 · Kartu Skandal (5 acak dari 20)')}${cardPicker(ck)}</div>
+      <div class="rounded-lg bg-berita text-ink px-3 py-2 text-xs font-bold uppercase">📰 Preview: ${t && c ? esc(c.h.replace('{t}', t.name)) : 'Pilih target untuk melihat headline'}</div>
+      <button data-a="${label}" class="${btn('korup')} w-full mt-3" ${t ? '' : 'disabled'}>🔒 Kirim ke Redaksi</button>`;
+  }
+  function nightDrawer() {
+    const mine = me(), r = M.role, act = M.nightAct;
+    if (mine.jailed) return `<div class="text-center py-4"><p class="font-display text-2xl uppercase text-zinc-300">⛓ Hitung Hari di Dinding</p><p class="text-sm text-zinc-500">Napi tidak beraksi malam hari. Ketuk dinding untuk menggores.</p>
+      <button data-a="wall" class="mt-4 w-full h-28 rounded-xl bg-ink-700 bars text-3xl tracking-[.3em] text-zinc-400 font-mono">${'|'.repeat(U.wall) || '·'}</button></div>`;
+    let plt = '';
+    if (false && M.plt && !act) plt = `<div class="mb-5 rounded-2xl ring-1 ring-korup/40 p-4 bg-korup-soft/40">${head('🐀', 'Plt. Koruptor', 'text-korup')}<p class="text-xs text-zinc-400 mt-1">Semua Koruptor dipenjara. Anda menjalankan tugas sebagai pelaksana: pilih kasus fiktif malam ini, lalu jalankan aksi role Anda di bawah.</p>${scandalForm('pltTarget', 'pltCard', 'pltSubmit')}</div>`;
+    if (act && !(r === 'KORUPTOR' && act.kind === 'AGREE' && false)) {
+      const lastInv = r === 'KPK' && act.kind === 'INVESTIGATE' && M.investigations && M.investigations[M.investigations.length - 1];
+      const res = lastInv ? `<div class="mt-4 rounded-xl ${lastInv.fac === 'GELAP' ? 'bg-korup-soft ring-korup/40' : 'bg-reform-soft ring-reform/40'} ring-1 p-4 text-left"><p class="text-xs uppercase tracking-widest text-zinc-400">Hasil Sadapan</p><p class="mt-1 text-lg">${persona(P(lastInv.id).persona).e} <b>${nm(P(lastInv.id))}</b> → ${facBadge(lastInv.fac)}</p></div>` : '';
+      const T = act.target != null ? nm(P(act.target)) : '';
+      const msg = act.kind === 'DUMMY' ? 'Anda melewati malam ini.' : { KORUPTOR: `Kasus terdaftar. No. Reg: KF/${String(V.day).padStart(2, '0')}/${esc(V.code)}`, BROKER: act.kind === 'RECRUIT' ? 'Amplop terkirim. Hasilnya diketahui pagi nanti.' : 'Anda memantau dari kejauhan.', BUZZER: `Tagar #${T}Gagal dijadwalkan trending.`, KPK: act.kind === 'OTT' ? `Tim OTT bergerak ke rumah ${T}. Hasilnya diumumkan pagi nanti.` : 'Alat sadap terpasang.', JURNALIS: `Tim cek fakta siaga untuk ${T}.`, PENGAMAT: 'Teropong terpasang. Hasil keluar saat fajar.', GURU_BESAR: 'Nilai dikirim. Semua dapat C.', WARGA: 'Terima kasih, survei Anda akan diabaikan.' }[r];
+      return `${plt}<div class="text-center py-6"><div class="text-5xl text-reform stamp inline-block">✓</div><p class="mt-3 font-semibold">${msg}</p>${res}<p class="mt-3 text-sm text-zinc-500">Menunggu fajar… <span class="font-mono">(${V.nightIn}/${V.nightTotal})</span></p></div>`;
+    }
+    const skip = '<button data-a="nskip" class="mt-3 w-full text-xs text-zinc-500 hover:text-zinc-300">Lewati malam ini</button>';
+    let body = '';
+    if (r === 'KORUPTOR') body = `${head('🐀', 'Kasus Fiktif Malam Ini', 'text-korup')}<div class="mt-3">${scandalForm('target', 'card', 'korSubmit')}</div>${M.korChoice && M.korChoice.by !== M.id ? `<button data-a="korAgree" class="${btn('ghost')} w-full mt-2">👍 Setuju pilihan rekan</button>` : ''}`;
+    else if (r === 'BROKER') {
+      const tabs = `<div class="mt-3 grid grid-cols-2 rounded-xl bg-white/5 p-1 text-sm">${['aksi', 'rekrut'].map((t) => `<button data-a="tab" data-v="${t}" class="h-9 rounded-lg ${U.sel.tab === t ? 'bg-ink-700 text-white' : 'text-zinc-400'}">${t === 'aksi' ? '👀 Pantau' : '🤝 Rekrut'}</button>`).join('')}</div>`;
+      if (U.sel.tab === 'aksi') body = `${head('🤝', 'Meja Broker', 'text-korup')}${tabs}<p class="mt-4 text-sm text-zinc-400">Malam ini Anda memantau Grup WA Gelap. ${M.recruitAvailable ? 'Hak rekrut masih tersedia (1x).' : 'Hak rekrut sudah terpakai.'}</p><button data-a="nact" data-v="PASS" class="${btn('ghost')} w-full mt-4">Selesai memantau</button>`;
+      else if (!M.recruitAvailable) body = `${head('🤝', 'Meja Broker', 'text-korup')}${tabs}<p class="mt-4 text-sm text-zinc-500">Hak Rekrut sudah dipakai di game ini.</p>`;
+      else body = `${head('🤝', 'Hak Rekrut (1x)', 'text-korup')}${tabs}<p class="text-xs text-zinc-500 mt-3">Hanya berhasil jika target Warga Sipil. Jika bukan, hak hangus. Presiden kebal.</p><div class="mt-3">${targetList({ exclude: (M.allies || []).map((a) => a.id), disabled: (p) => p.id === V.presidentId, disLabel: '👑 kebal' })}</div>
+        ${U.modal === 'confirmRecruit' ? `<div class="mt-3 rounded-xl bg-korup-soft ring-1 ring-korup/40 p-3 text-sm">Yakin? Hak ini hanya sekali per game.<div class="mt-2 grid grid-cols-2 gap-2"><button data-a="modalClose" class="${btn('ghost')} h-10">Batal</button><button data-a="nact" data-v="RECRUIT" class="${btn('korup')} h-10">Kirim Amplop</button></div></div>` : `<button data-a="confirmRecruit" class="${btn('korup')} w-full mt-4" ${U.sel.target != null ? '' : 'disabled'}>✉️ Kirim Amplop</button>`}`;
+    } else if (r === 'BUZZER') body = `${head('📣', 'Operasi Trending', 'text-korup')}<p class="text-xs text-zinc-500 mt-1">Suara target dibalik pada voting besok (pemilu atau petisi). Target tidak tahu.</p><div class="mt-3">${targetList({})}</div><button data-a="nact" data-v="FLIP" class="${btn('korup')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>📈 Jadwalkan Trending</button>`;
+    else if (r === 'KPK') {
+      const inv = M.investigations || [];
+      const tabs = `<div class="mt-3 grid grid-cols-2 rounded-xl bg-white/5 p-1 text-sm">${[['sadap', '🎧 Sadap'], ['ott', '🚨 OTT']].map(([t, l]) => `<button data-a="kpkTab" data-v="${t}" class="h-9 rounded-lg ${U.sel.kpk === t ? 'bg-ink-700 text-white' : 'text-zinc-400'}">${l}</button>`).join('')}</div>`;
+      body = `${head('🕵️', U.sel.kpk === 'ott' ? 'Operasi Tangkap Tangan' : 'Penyadapan', 'text-reform')}${tabs}
+        <p class="text-xs text-zinc-500 mt-3">${U.sel.kpk === 'ott' ? 'Jika target Faksi Gelap, ia jadi Tersangka besok. Jika bersih, berita mengumumkan OTT salah sasaran (publik tahu ia bersih). Presiden imun.' : 'Ketahui faksi satu pemain. Hasil hanya untuk Anda.'}</p>
+        <div class="mt-3">${targetList({ ring: 'aria-checked:ring-reform', mark: (p) => { const i = inv.find((x) => x.id === p.id); return i ? (i.fac === 'GELAP' ? '🔴 gelap' : '🟢 bersih') : ''; }, disabled: U.sel.kpk === 'ott' ? (p) => p.id === V.presidentId : null, disLabel: '👑 imun' })}</div>
+        <button data-a="nact" data-v="${U.sel.kpk === 'ott' ? 'OTT' : 'INVESTIGATE'}" class="${btn('reform')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>${U.sel.kpk === 'ott' ? '🚨 Jalankan OTT' : '🎧 Sadap'}</button>
+        ${inv.length ? `<div class="mt-4">${sectionTitle('Berkas Sadapan')}<ul class="mt-2 space-y-1 text-sm">${inv.map((i) => `<li class="flex justify-between gap-2"><span>Malam ${i.night}: ${nm(P(i.id))}</span>${facBadge(i.fac)}</li>`).join('')}</ul></div>` : ''}`;
+    } else if (r === 'JURNALIS') body = `${head('🎙️', 'Meja Cek Fakta', 'text-reform')}<p class="text-xs text-zinc-500 mt-1">Fitnah ke orang yang Anda cek fakta akan dicap HOAKS. Boleh diri sendiri, tidak boleh orang yang sama 2 malam berturut.</p><div class="mt-3">${targetList({ self: true, ring: 'aria-checked:ring-reform', disabled: (p) => p.id === M.lastProtected, disLabel: 'kemarin' })}</div><button data-a="nact" data-v="FACTCHECK" class="${btn('reform')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>🔎 Cek Fakta</button><p class="mt-3 text-[11px] text-zinc-500">📰 Jika dijebloskan Presiden, Anda dapat Hak Headline untuk Breaking News berikutnya.</p>`;
+    else if (r === 'PENGAMAT') body = `${head('📊', 'Analisis Malam', 'text-reform')}<p class="text-xs text-zinc-500 mt-1">Amati satu pemain. Saat fajar Anda tahu siapa yang ia datangi.</p><div class="mt-3">${targetList({ ring: 'aria-checked:ring-reform' })}</div><button data-a="nact" data-v="OBSERVE" class="${btn('reform')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>📊 Amati</button>${(M.observations || []).length ? `<div class="mt-4">${sectionTitle('Catatan Pengamatan')}<ul class="mt-2 space-y-1 text-sm">${M.observations.map((o) => `<li>Malam ${o.night}: ${nm(P(o.id))} → ${o.visited != null ? nm(P(o.visited)) : 'diam'}</li>`).join('')}</ul></div>` : ''}`;
+    else if (r === 'GURU_BESAR') body = `${head('🧑‍🏫', 'Koreksi Disertasi', 'text-zinc-300')}<p class="text-xs text-zinc-500 mt-1">Guru Besar tidak beraksi malam. ${M.expertUsed ? 'Kesaksian Ahli sudah terpakai.' : '<b class="text-reform">Kesaksian Ahli (1x) tersedia saat Sidang.</b>'}</p>
+      <div class="mt-3 space-y-3">${DISERTASI.map((q, qi) => `<div><p class="text-sm">“${q}”</p><div class="mt-1 flex gap-2">${['A', 'B', 'C'].map((o, oi) => `<button data-a="survey" data-v="${qi}:${oi}" aria-pressed="${U.sel.survey[qi] === oi}" class="size-9 rounded-lg text-sm ring-1 ring-white/10 bg-white/5 aria-pressed:bg-white aria-pressed:text-ink">${o}</button>`).join('')}</div></div>`).join('')}</div>
+      <button data-a="nact" data-v="DUMMY" class="${btn('ghost')} w-full mt-4" ${Object.keys(U.sel.survey).length === 3 ? '' : 'disabled'}>Kumpulkan Nilai</button>`;
+    else body = `${head('📝', 'Survei Kepuasan Publik', 'text-zinc-300')}<p class="text-xs text-zinc-500 mt-1">Warga Sipil tidak punya aksi malam. Isi survei agar terlihat sibuk seperti yang lain.</p>
+      <div class="mt-3 space-y-3">${SURVEY.map((s, qi) => `<div><p class="text-sm">${qi + 1}. ${s.q}</p><div class="mt-1 flex flex-wrap gap-2">${s.o.map((o, oi) => `<button data-a="survey" data-v="${qi}:${oi}" aria-pressed="${U.sel.survey[qi] === oi}" class="rounded-lg px-3 py-1.5 text-xs ring-1 ring-white/10 bg-white/5 aria-pressed:bg-white aria-pressed:text-ink">${o}</button>`).join('')}</div></div>`).join('')}</div>
+      <button data-a="nact" data-v="DUMMY" class="${btn('ghost')} w-full mt-4" ${Object.keys(U.sel.survey).length === 3 ? '' : 'disabled'}>Kirim Survei</button>`;
+    const showSkip = !['WARGA', 'GURU_BESAR'].includes(r);
+    return plt + body + (showSkip ? skip : '');
+  }
+  function darkChatBox() {
+    if (!isDarkMe()) return '';
+    return `<div class="mt-4 rounded-2xl bg-[#0b1410] ring-1 ring-korup/25 p-4"><div class="flex items-center justify-between">${sectionTitle('💬 Grup WA Gelap')}<span class="text-[10px] text-zinc-500">🔒 hanya sindikat</span></div>
+      <div class="mt-3 space-y-2 max-h-48 overflow-y-auto" data-scroll-key="dark" data-autoscroll>${(M.dark || []).length ? M.dark.map((d) => `<div class="max-w-[85%] ${d.from === M.id ? 'ml-auto bg-korup/25' : 'bg-white/5'} rounded-2xl px-3 py-2 text-sm"><b class="text-xs text-korup">${nm(P(d.from))}</b><br>${esc(d.text)}</div>`).join('') : '<p class="text-xs text-zinc-600">Belum ada pesan.</p>'}</div>
+      <form data-form="dark" class="mt-3 flex gap-2"><input id="darkInput" name="t" maxlength="160" autocomplete="off" placeholder="Bisik-bisik…" class="flex-1 h-10 rounded-xl bg-ink-800 px-3 text-sm outline-none focus:ring-1 focus:ring-korup"><button class="${btn('korup')} h-10 px-3">➤</button></form></div>`;
+  }
+  function scrNight() {
+    return `<div class="min-h-screen relative overflow-hidden bg-ink">
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ff2e4d22,transparent_60%)]"></div><div class="pointer-events-none absolute inset-0 noise opacity-[.07] mix-blend-overlay"></div>
+      <div class="relative max-w-5xl mx-auto px-4 sm:px-6 py-6 md:grid md:grid-cols-[1fr_420px] md:gap-6"><section>
+        <div class="flex items-center justify-between gap-3"><div><p class="font-mono text-xs tracking-[.3em] text-zinc-500">MALAM KE-${V.day}</p><h2 class="font-display text-4xl uppercase">Lobi Gelap</h2></div>${timerRing('stroke-korup', 60)}</div>
+        <div class="mt-4 rounded-xl bg-korup-soft ring-1 ring-korup/30 px-4 py-3 text-sm flex items-start gap-3"><span class="relative mt-1.5 flex size-2"><span class="absolute inset-0 rounded-full bg-korup animate-ping"></span><span class="relative size-2 rounded-full bg-korup"></span></span><span data-banner>${NIGHT_BANNERS[U.bannerIdx % NIGHT_BANNERS.length]}</span></div>
+        <div class="mt-4 rounded-2xl bg-ink-800/70 ring-1 ring-white/10 p-4">${scandalMeter()}</div>
+        <div class="mt-4 rounded-2xl bg-ink-800/70 ring-1 ring-white/10 p-4">${sectionTitle('Daftar Warga')}
+          <div class="mt-3 grid grid-cols-4 sm:grid-cols-6 gap-3">${V.players.map((p) => `<div class="text-center opacity-80">${avatar(p, 'size-12 mx-auto')}<p class="mt-1 text-[11px] truncate ${p.id === M.id ? 'text-istana' : ''}">${nm(p)}</p></div>`).join('')}</div></div>
+        ${darkChatBox()}<div class="h-[62vh] md:hidden"></div></section>
+      <aside class="fixed md:static inset-x-0 bottom-0 z-20 max-h-[78vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-ink-900/95 backdrop-blur ring-1 ring-white/10 p-5 pb-8 md:h-fit md:sticky md:top-6 shadow-[0_-20px_60px_#000]" data-scroll-key="drawer">
+        <div class="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20 md:hidden"></div>${nightDrawer()}</aside></div></div>`;
+  }
+
+  // ------------------------------------------------------- MORNING
+  function scrMorning() {
+    const n = V.news || { kind: 'QUIET', head: '…', low: '' }, bar = { SUCCESS: 'bg-korup text-white', BLOCKED: 'bg-reform text-ink', QUIET: 'bg-zinc-700 text-white' }[n.kind];
+    return `<div class="min-h-screen bg-ink/95 flex flex-col">
+      <div class="flex items-center justify-between px-6 py-4"><span class="inline-flex items-center gap-1.5 text-xs font-bold text-korup"><span class="size-2 rounded-full bg-korup animate-pulse"></span>LIVE • MDU-TV</span><span class="font-mono text-xs text-zinc-500">PAGI KE-${V.day}</span></div>
+      <div class="flex-1 flex flex-col justify-center px-6 md:px-16 max-w-5xl">
+        <div class="slide-in self-start ${bar} font-display text-2xl md:text-4xl uppercase px-5 py-1">Breaking News</div>
+        <h1 class="mt-6 font-display text-5xl md:text-7xl uppercase leading-[.92] text-white chroma rise">${esc(n.head)}</h1>
+        ${n.low ? `<div class="mt-8 bg-berita text-ink px-4 py-2 font-semibold rise" style="animation-delay:.3s">🟡 ${esc(n.low)}</div>` : ''}
+        ${n.kpk ? `<div class="mt-3 bg-reform text-ink px-4 py-2 font-semibold rise" style="animation-delay:.4s">🚨 ${esc(n.kpk)}</div>` : ''}
+        ${n.column ? `<div class="mt-5 rise max-w-3xl" style="animation-delay:.45s"><div class="inline-block bg-ink text-berita ring-1 ring-berita/50 text-xs font-bold uppercase tracking-widest px-2 py-1">📰 Kolom dari Balik Jeruji • ${nm(P(n.column.by))}</div><div class="bg-kertas text-ink font-mono text-lg md:text-xl px-4 py-3 -rotate-[.4deg]">“${esc(n.column.text)}”</div></div>` : ''}
+        <div class="mt-6 max-w-md rise" style="animation-delay:.5s">${scandalMeter()}</div></div>
+      ${ticker()}<div class="flex justify-between items-center px-6 py-4"><span class="text-xs text-zinc-500">Sidang dimulai otomatis…</span>${timerRing('stroke-berita', 40)}</div></div>`;
+  }
+
+  // ------------------------------------------------------- SIDANG
+  function chatLine(c) {
+    if (c.sys) return `<p class="mx-auto text-center text-xs text-zinc-500 italic px-4">${esc(c.text)}</p>`;
+    const p = P(c.from); if (!p) return '';
+    const mine = c.from === M.id, isP = c.from === V.presidentId;
+    if (c.letter) return `<div class="max-w-[85%] ${mine ? 'ml-auto' : ''}"><p class="text-[10px] text-zinc-500 mb-0.5">📜 Surat dari balik jeruji • ${nm(p)}</p><div class="bg-kertas text-ink rounded-lg px-3 py-2 font-mono text-sm -rotate-[.5deg]">${esc(c.text)}</div></div>`;
+    return `<div class="flex gap-2 ${mine ? 'flex-row-reverse' : ''}"><div class="size-8 shrink-0 rounded-xl bg-ink-700 grid place-items-center">${persona(p.persona).e}</div>
+      <div class="max-w-[78%] rounded-2xl px-3 py-2 ${mine ? 'bg-reform/15' : 'bg-white/5'}"><p class="text-[11px] font-semibold ${isP ? 'text-istana' : 'text-zinc-400'}">${isP ? '👑 ' : ''}${nm(p)}${tag(p)}</p><p class="text-sm break-words">${esc(c.text)}</p></div></div>`;
+  }
+  function chatPanel(title, h) {
+    const mine = me(), canChat = !mine.jailed, canLetter = mine.jailed && !M.letterUsed && ['SIDANG', 'DECISION'].includes(V.phase);
+    return `<div class="flex flex-col rounded-2xl bg-ink-800/50 ring-1 ring-white/10 ${h}">
+      <div class="px-4 py-3 border-b border-white/5 flex justify-between items-center">${sectionTitle('💬 ' + title)}<span class="text-[10px] text-zinc-500">${V.players.filter((p) => !p.bot && p.connected).length} online</span></div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-3" data-scroll-key="chat" data-autoscroll aria-live="polite">${V.chat.map(chatLine).join('')}</div>
+      <div class="px-3 pt-2 flex gap-1">${REACTS.map((e) => `<button data-a="react" data-v="${e}" class="size-9 rounded-lg hover:bg-white/10 ${canChat ? '' : 'opacity-30 pointer-events-none'}">${e}</button>`).join('')}</div>
+      <form data-form="chat" class="flex gap-2 p-3 border-t border-white/5"><input id="chatInput" name="t" maxlength="200" autocomplete="off" ${canChat || canLetter ? '' : 'disabled'} placeholder="${canChat ? 'Sampaikan pendapat Anda…' : canLetter ? '📜 Tulis surat dari balik jeruji (1x hari ini)' : 'Anda di rutan. Surat hari ini sudah terkirim.'}" class="flex-1 min-w-0 h-11 rounded-xl ${canLetter ? 'bg-kertas text-ink font-mono' : 'bg-ink-800'} px-4 text-sm outline-none focus:ring-1 focus:ring-reform disabled:opacity-50">
+        <button class="${btn(canLetter ? 'istana' : 'reform')} h-11 px-4" ${canChat || canLetter ? '' : 'disabled'}>${canLetter ? 'Kirim Surat' : 'Kirim'}</button></form></div>`;
+  }
+  function caseFiles(forPres) {
+    const cs = V.cases || [];
+    if (!cs.length) return '<div class="rounded-xl bg-kertas text-ink p-4 font-mono text-sm"><p class="text-korup font-bold">📁 BERKAS HARI INI</p><p class="mt-2">Tidak ada kasus hari ini. Nikmati kopi Anda.</p></div>';
+    return cs.map((c) => { const s = P(c.suspect); return `<div class="relative rounded-xl bg-kertas text-ink p-4 font-mono text-sm overflow-hidden">
+      <p class="${c.kind === 'KPK' ? 'text-emerald-700' : 'text-korup'} font-bold">${c.kind === 'KPK' ? '🚨' : '📁'} BERKAS ${esc(c.no)}</p>
+      <p class="mt-2">Tersangka : ${persona(s.persona).e} <b>${nm(s)}</b></p><p>Tuduhan  : ${c.kind === 'KPK' ? 'Tertangkap tangan KPK' : esc(card(c.card).title)}</p>
+      <p class="mt-2 text-xs opacity-70">${c.vetoed ? 'Status: DIBATALKAN (Veto)' : s.jailed ? 'Status: DIPENJARA' : V.decided ? 'Status: ditutup Keppres' : forPres ? 'Status: menunggu keputusan Anda' : V.phase === 'DECISION' ? 'Status: Presiden sedang menimbang…' : 'Status: menunggu keputusan Presiden'}</p>
+      ${c.vetoed ? '<span class="absolute right-3 top-6 border-2 border-istana text-istana font-display text-xl px-2 -rotate-12">VETO</span>' : ''}</div>`; }).join('<div class="h-2"></div>');
+  }
+  function prisonWidget() {
+    const pr = V.players.filter((p) => p.jailed), cells = Math.max(3, pr.length + 1);
+    return `<div class="rounded-2xl bg-ink-800 ring-1 ring-white/10 p-4"><div class="flex justify-between items-center">${sectionTitle('⛓ Rutan Negara')}<span class="text-xs text-zinc-500">${pr.length} napi</span></div>
+      <div class="mt-3 grid grid-cols-3 gap-2">${Array.from({ length: cells }, (_, i) => { const p = pr[i]; if (!p) return '<div class="rounded-xl border-2 border-dashed border-white/10 grid place-items-center text-[11px] text-zinc-600 min-h-[150px]">sel kosong</div>';
+        const mine = p.id === M.id;
+        return `<div class="relative rounded-xl bg-ink-900 p-2 pt-3 overflow-hidden text-center min-h-[150px] flex flex-col ${mine ? 'ring-1 ring-istana/40' : ''}"><div class="absolute inset-0 bars pointer-events-none"></div>
+          <div class="mx-auto w-11 aspect-[2.5/3.5] rounded-md bg-kertas grid place-items-center text-ink/40 font-display text-lg shadow-inner">??</div>
+          <p class="mt-2 text-xs font-semibold truncate">${persona(p.persona).e} ${nm(p)}</p><p class="text-[10px] text-zinc-500">sejak hari ${p.jailedDay}</p>
+          ${mine ? `<div class="relative mt-auto space-y-1 pt-1">${M.headlineRight ? '<button data-a="headline" class="w-full min-h-8 py-1 leading-tight rounded-lg bg-berita text-ink text-[11px] font-bold">📰 Headline</button>' : ''}${p.appealUsed ? '<p class="text-[10px] text-zinc-500">Banding terkirim</p>' : `<button data-a="appeal" ${V.presidentId && ['SIDANG', 'DECISION'].includes(V.phase) ? '' : 'disabled'} class="w-full min-h-8 py-1 leading-tight rounded-lg bg-istana-soft text-istana ring-1 ring-istana/40 text-[11px] font-semibold hover:bg-istana hover:text-ink disabled:opacity-40">Banding 🙏</button>`}</div>` : `<p class="relative mt-auto text-[10px] text-zinc-600 pt-1">${p.appealUsed ? 'banding terpakai' : ''}</p>`}</div>`; }).join('')}</div></div>`;
+  }
+  function impeachTracker() {
+    if (V.presidentId == null) return '<div class="rounded-2xl bg-ink-800 ring-1 ring-white/10 p-4 text-sm text-zinc-500">📢 Kursi Presiden kosong.</div>';
+    const { eff, needed, pct } = V.impeach, mine = me(), signed = M.signed, pr = P(V.presidentId);
+    const canSign = !mine.jailed && !isPres() && ['SIDANG', 'DECISION'].includes(V.phase) && !V.decided && !V.carryover && !V.locked;
+    return `<div class="rounded-2xl bg-ink-800 ring-1 ring-white/10 p-4"><div class="flex justify-between items-center">${sectionTitle('📢 Demo Pemakzulan')}<span class="font-mono text-sm">${eff}/${needed} <span class="text-zinc-500">(${pct}%)</span></span></div>
+      <p class="mt-1 text-sm">“Turunkan ${nm(pr)}!”</p>
+      <div class="relative mt-3 h-3 rounded-full bg-white/10 overflow-hidden"><div class="h-full bg-gradient-to-r from-berita to-korup transition-[width] duration-500" style="width:${pct}%"></div><div class="absolute left-1/2 top-0 h-full w-0.5 bg-white/70"></div></div>
+      <div class="flex justify-between text-[10px] text-zinc-500 mt-1"><span>0%</span><span>ambang 50%</span><span>100%</span></div>
+      <p class="text-xs text-zinc-400 mt-2">${needed - eff > 0 ? `Butuh ${needed - eff} tanda tangan lagi.` : 'Ambang tercapai!'} Nama penanda tangan dirahasiakan.</p>
+      ${canSign ? `<button data-a="sign" class="${btn(signed ? 'korup' : 'ghost')} w-full mt-3 h-11">${signed ? '✓ Sudah Tanda Tangan (Tarik?)' : '✍ Tanda Tangan Petisi'}</button>` : mine.jailed ? '<p class="text-xs text-zinc-500 mt-3">⛓ Napi tidak bisa ikut demo.</p>' : isPres() ? '<p class="text-xs text-istana mt-3">Anda Presiden. Petisi ini tentang Anda 👀</p>' : V.decided ? '<p class="text-xs text-zinc-500 mt-3">Petisi dibekukan setelah Keppres.</p>' : ''}</div>`;
+  }
+  function presidentPanel(active) {
+    const P0 = M.president || { vetoAvailable: false, appeals: [] }, oc = openCases(), prisoners = V.players.filter((p) => p.jailed), rep = P0.expertReport || null;
+    const lock = !active || V.decided || V.locked;
+    return `<div class="rounded-3xl bg-gradient-to-b from-istana/20 via-ink-900 to-ink-900 ring-1 ring-istana/50 shadow-neon-istana p-5 space-y-4">
+      <div class="flex items-center justify-between"><div><p class="font-display text-2xl uppercase text-istana">👑 Meja Presiden</p><p class="text-xs text-zinc-400">${V.plt ? 'Plt. Presiden • 1 putaran • tanpa veto' : `Periode ${V.term.n} • Putaran ${V.term.round}/2`}${V.carryover ? ' • Keppres susulan' : ''}</p></div>${active ? timerRing('stroke-istana', 52) : '<span class="text-[10px] uppercase tracking-widest text-zinc-500 border border-white/10 rounded px-2 py-1">mode draf</span>'}</div>
+      ${caseFiles(true)}
+      ${rep ? `<div class="rounded-xl bg-kertas text-ink p-3 font-mono text-sm">🧑‍🏫 Kajian Ahli:<br>${Object.keys(rep).map((id) => `${nm(P(id))} → <b class="${rep[id] === 'GELAP' ? 'text-korup' : 'text-emerald-700'}">${rep[id] === 'GELAP' ? '🔴 FAKSI GELAP' : '🟢 REFORMIS'}</b>`).join('<br>')}</div>` : ''}
+      <p class="text-sm text-center text-zinc-300 italic">“Apakah tuduhan ini sesuai?”</p>
+      ${oc.length ? `<div class="space-y-2">${oc.map((c) => `<button data-a="veto" data-v="${esc(c.id)}" class="relative w-full min-h-14 py-2 rounded-2xl font-display text-lg uppercase tracking-wide transition ${P0.vetoAvailable && !lock ? 'bg-istana text-ink pulse-gold' : 'bg-zinc-800 text-zinc-500'}" ${P0.vetoAvailable && !lock ? '' : 'disabled'}>✨ Veto ${esc(c.no)}<span class="block font-sans text-[10px] normal-case tracking-normal">${P0.vetoAvailable ? (c.kind === 'FITNAH' ? 'Batalkan kasus semalam • Skandal −1 • 1x per masa jabatan' : 'Batalkan OTT semalam • 1x per masa jabatan') : 'Veto telah digunakan periode ini'}</span></button>`).join('')}</div>` : `<div class="w-full h-12 rounded-2xl grid place-items-center bg-zinc-800 text-zinc-500 text-sm">✨ Hak Veto ${P0.vetoAvailable ? 'tersedia (tidak ada kasus)' : 'sudah dipakai'}</div>`}
+      <div class="space-y-2">
+        ${oc.length ? oc.map((c) => `<button data-a="decide" data-v="JAIL" data-s="${esc(c.suspect)}" ${lock ? 'disabled' : ''} class="w-full text-left rounded-2xl p-4 ring-1 transition bg-korup-soft ring-korup/50 hover:bg-korup hover:text-white disabled:opacity-35 disabled:pointer-events-none"><span class="block font-display text-2xl uppercase">⛓ Jebloskan ${nm(P(c.suspect))}</span><span class="text-xs opacity-75">Tuduhan ${esc(c.no)} dinilai SAH</span></button>`).join('') : `<button disabled class="w-full text-left rounded-2xl p-4 ring-1 bg-korup-soft ring-korup/50 opacity-35"><span class="block font-display text-2xl uppercase">⛓ Jebloskan ke Penjara</span><span class="text-xs opacity-75">Tidak ada tersangka hari ini</span></button>`}
+        <div class="rounded-2xl ring-1 ring-reform/50 bg-reform-soft"><button data-a="freeToggle" ${lock || !prisoners.length ? 'disabled' : ''} class="w-full text-left p-4 rounded-2xl hover:bg-reform hover:text-ink transition disabled:opacity-35 disabled:pointer-events-none"><span class="block font-display text-2xl uppercase">🔓 Bebaskan Napi ${prisoners.length ? '▾' : ''}</span><span class="text-xs opacity-75">${prisoners.length ? 'Napi yang dibebaskan kehilangan role-nya dan menjadi Warga Sipil biasa' : 'Rutan sedang kosong'}</span></button>
+          ${U.prisonerPick !== null && !lock ? `<div class="px-4 pb-4 grid grid-cols-3 gap-2">${prisoners.map((p) => `<button data-a="pickPrisoner" data-v="${esc(p.id)}" class="rounded-xl p-2 text-center ring-1 ${U.prisonerPick === p.id ? 'ring-2 ring-reform bg-reform/20' : 'ring-white/10 bg-ink-800'}"><div class="text-2xl">${persona(p.persona).e}</div><div class="text-xs truncate">${nm(p)}</div></button>`).join('')}<button data-a="decide" data-v="FREE" ${U.prisonerPick && U.prisonerPick !== -1 ? '' : 'disabled'} class="${btn('reform')} col-span-3 h-10 mt-1">Bebaskan ${U.prisonerPick && U.prisonerPick !== -1 ? nm(P(U.prisonerPick)) : ''}</button></div>` : ''}</div>
+        <button data-a="decide" data-v="STATUS_QUO" ${lock ? 'disabled' : ''} class="w-full text-left rounded-2xl p-4 ring-1 transition bg-white/5 ring-white/10 hover:bg-white/10 disabled:opacity-35 disabled:pointer-events-none"><span class="block font-display text-2xl uppercase">🤐 Status Quo / Diam</span><span class="text-xs opacity-75">Tuduhan dikesampingkan, tidak ada perubahan</span></button>
+      </div>
+      ${active && !V.decided ? '<p class="text-xs text-korup text-center">Jika waktu habis, Status Quo berlaku otomatis.</p>' : ''}${!active ? '<p class="text-xs text-zinc-500 text-center">Tombol terbuka saat fase Keputusan dimulai.</p>' : ''}
+      <div>${sectionTitle(`📨 Surat Banding (${P0.appeals.length})`)}<div class="mt-2 space-y-2">${P0.appeals.length ? P0.appeals.map((a) => `<button data-a="appealPick" data-v="${esc(a.from)}" class="w-full text-left rounded-lg bg-white/5 p-3 text-sm hover:bg-white/10"><b>${persona(P(a.from).persona).e} ${nm(P(a.from))}:</b> “${esc(a.text)}”</button>`).join('') : '<p class="text-xs text-zinc-600">Belum ada surat.</p>'}</div></div></div>`;
+  }
+  function scrSidang() {
+    const mine = me(), pres = isPres(), decision = V.phase === 'DECISION', pr = P(V.presidentId);
+    const left = `<div class="rounded-2xl bg-ink-800/70 ring-1 ring-white/10 p-4">${sectionTitle('Peserta')}
+      <ul class="mt-3 space-y-2">${V.players.map((x) => `<li class="flex items-center gap-2">${avatar(x, 'size-9 text-lg')}<div class="min-w-0"><p class="text-sm font-semibold truncate ${x.id === M.id ? 'text-istana' : ''}">${nm(x)}${tag(x)}</p><p class="text-[10px] flex gap-1 flex-wrap">${x.suspect ? '<span class="text-korup font-bold">⚠ TERSANGKA</span>' : ''}${x.impeached ? '<span class="text-zinc-500">🚫 cacat politik</span>' : x.impeachCount ? '<span class="text-berita">⚠️ dimakzulkan 1x</span>' : ''}${x.jailed ? '<span class="text-zinc-500">napi</span>' : ''}${x.exNapi && !x.jailed ? '<span class="text-reform">🔓 eks-napi, warga biasa</span>' : ''}</p></div></li>`).join('')}</ul>
+      ${M.role === 'KPK' && (M.investigations || []).length ? `<div class="mt-4 pt-3 border-t border-white/5">${sectionTitle('🔍 Berkas Pribadi')}<ul class="mt-2 space-y-1 text-xs">${M.investigations.map((i) => `<li class="flex justify-between gap-2"><span>${nm(P(i.id))}</span><span class="${i.fac === 'GELAP' ? 'text-korup' : 'text-reform'}">${i.fac}</span></li>`).join('')}</ul></div>` : ''}
+      ${M.role === 'PENGAMAT' && (M.observations || []).length ? `<div class="mt-4 pt-3 border-t border-white/5">${sectionTitle('📊 Pengamatan')}<ul class="mt-2 space-y-1 text-xs">${M.observations.map((o) => `<li>M${o.night}: ${nm(P(o.id))} → ${o.visited != null ? nm(P(o.visited)) : 'diam'}</li>`).join('')}</ul></div>` : ''}</div>`;
+    const center = chatPanel('Ruang Sidang', 'min-h-[60vh] md:h-[calc(100vh-150px)]');
+    const skip = V.phase === 'SIDANG' && !mine.jailed ? `<button data-a="skip" ${M.skipped ? 'disabled' : ''} class="${btn('ghost')} w-full h-10 text-sm">${M.skipped ? '✓ Anda siap ke keputusan' : '⏭ Siap ke keputusan'} <span class="font-mono text-xs text-zinc-400">${V.skip.n}/${V.skip.need}</span></button>` : '';
+    const testify = M.role === 'GURU_BESAR' && !mine.jailed ? `<div class="rounded-2xl bg-reform-soft ring-1 ring-reform/40 p-4">${sectionTitle('🧑‍🏫 Kesaksian Ahli')}<p class="text-xs text-zinc-400 mt-1">Sekali per game. Presiden menerima kajian privat tentang faksi asli Tersangka hari ini.</p>
+      <button data-a="testify" class="${btn('reform')} w-full mt-3 h-11" ${openCases().length && !M.expertUsed && !V.decided && V.presidentId ? '' : 'disabled'}>${M.expertUsed ? 'Kesaksian sudah diberikan' : 'Serahkan Kajian ke Presiden'}</button></div>` : '';
+    const right = `<div class="space-y-4">${skip}
+      ${pres && !decision ? presidentPanel(false) : ''}
+      ${!pres && decision ? `<div class="rounded-2xl bg-istana-soft ring-1 ring-istana/40 p-4 flex items-center gap-3">${timerRing('stroke-istana', 48)}<div><p class="font-semibold text-istana">🏛️ Presiden ${pr ? nm(pr) : ''} sedang menimbang…</p><p class="text-xs text-zinc-400">Petisi masih bisa ditandatangani sampai Keppres diumumkan.</p></div></div>` : ''}
+      ${!pres ? caseFiles(false) : ''}${testify}${prisonWidget()}${impeachTracker()}</div>`;
+    const tabs = [['chat', '💬 Sidang'], ['rutan', '⛓ Rutan'], ['kasus', '📁 Kasus'], ['demo', '📢 Demo']];
+    return `<div class="min-h-screen flex flex-col">
+      <header class="sticky top-0 z-30 bg-ink/90 backdrop-blur border-b border-white/5"><div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div><p class="font-display text-xl uppercase leading-none">${decision ? 'Keputusan Presiden' : 'Sidang Paripurna'}</p><p class="font-mono text-[11px] text-zinc-500">HARI ${V.day} • #${esc(V.code)}</p></div>
+        ${timerRing(decision ? 'stroke-istana' : 'stroke-reform', 44)}<div class="w-48">${scandalMeter(false)}</div>
+        <div class="ml-auto flex items-center gap-2 text-sm">${pr ? `<span class="text-istana">👑 ${V.plt ? 'Plt. ' : ''}${nm(pr)}</span><span class="font-mono text-xs text-zinc-500">(${V.plt ? 'darurat' : V.term.round + '/2'})</span>` : '<span class="text-zinc-500">Kursi presiden kosong</span>'}
+          <button data-a="peek" class="ml-2 size-9 rounded-lg ring-1 ring-white/10 hover:bg-white/10" title="Intip kartu role Anda">👁</button></div></div>
+        ${ticker('text-xs py-1')}<div class="md:hidden h-1 bg-white/10"><div class="h-full bg-gradient-to-r from-berita to-korup" style="width:${V.impeach.pct}%"></div></div></header>
+      <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-4 pb-24 md:pb-4">
+        <div class="hidden md:grid md:grid-cols-[220px_1fr_360px] gap-4 items-start">${left}${center}${right}</div>
+        <div class="md:hidden">${pres && !decision ? `<div class="mb-4">${presidentPanel(false)}</div>` : ''}${skip ? `<div class="mb-3">${skip}</div>` : ''}
+          ${U.mobileTab === 'chat' ? center : U.mobileTab === 'rutan' ? prisonWidget() : U.mobileTab === 'kasus' ? `<div class="space-y-4">${caseFiles(pres)}${testify}${left}</div>` : impeachTracker()}</div></main>
+      <nav class="md:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 bg-ink-900/95 backdrop-blur border-t border-white/10">${tabs.map(([k, l]) => `<button data-a="mtab" data-v="${k}" class="h-14 text-xs ${U.mobileTab === k ? 'text-white' : 'text-zinc-500'}">${l}</button>`).join('')}</nav>
+      ${pres && decision && U.presDrawer ? `<div class="fixed inset-0 z-40 bg-ink/60 backdrop-blur-sm"></div><aside class="fixed z-50 inset-x-0 bottom-0 md:inset-y-0 md:left-auto md:w-[460px] max-h-[92vh] md:max-h-none overflow-y-auto p-3 md:p-4" data-scroll-key="pres"><button data-a="presDrawer" class="mb-2 w-full text-center text-xs text-zinc-300 hover:text-white">▾ Ciutkan meja (lihat sidang)</button>${presidentPanel(true)}</aside>` : ''}
+      ${pres && decision && !U.presDrawer && !V.decided ? `<button data-a="presDrawer" class="fixed z-40 bottom-20 md:bottom-6 right-4 ${btn('istana')} pulse-gold">👑 Buka Meja Presiden</button>` : ''}</div>`;
+  }
+
+  // ------------------------------------------------------- END
+  function scrEnd() {
+    const g = V.winner === 'GELAP', creator = M.id === V.creatorId;
+    const top = (k, label) => { let best = null, v = 0; Object.keys(V.stats || {}).forEach((id) => { const s = V.stats[id]; if ((s[k] || 0) > v) { v = s[k]; best = id; } }); const p = best && P(best); return p ? `<li class="rounded-xl bg-white/5 p-3"><span class="text-xs text-zinc-400">${label}</span><br><b>${persona(p.persona).e} ${nm(p)}</b> <span class="text-zinc-500 text-xs">(${v}x)</span></li>` : ''; };
+    return `<div class="min-h-screen ${g ? 'bg-[radial-gradient(ellipse_at_top,#ff2e4d33,#09090b_60%)]' : 'bg-[radial-gradient(ellipse_at_top,#22e39a2e,#09090b_60%)]'}"><main class="max-w-4xl mx-auto px-5 py-12 text-center">
+      <p class="font-mono text-xs tracking-[.3em] text-zinc-500">SIDANG DITUTUP • ${V.day} HARI</p>
+      <h1 class="mt-3 font-display text-6xl md:text-8xl uppercase leading-none ${g ? 'text-korup' : 'text-reform'} stamp inline-block">${g ? 'Faksi Gelap Menang' : 'Reformis Menang'}</h1>
+      <p class="mt-4 text-zinc-300">“${esc(V.reason)}”</p>
+      <p class="mt-2 text-sm">${M.faction === V.winner ? '<span class="text-reform font-semibold">🎉 Faksi Anda menang!</span>' : '<span class="text-zinc-400">Faksi Anda kalah. Ada sidang berikutnya.</span>'}</p>
+      <div class="mt-10 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">${V.players.map((p, i) => { const r = ROLES[p.role] || ROLES.WARGA, d = r.fac === 'GELAP'; return `<div class="rise rounded-2xl p-3 ring-1 ${d ? 'ring-korup/50 bg-korup-soft' : 'ring-reform/40 bg-reform-soft'}" style="animation-delay:${i * 0.06}s"><div class="text-3xl">${r.icon}</div><p class="font-semibold text-sm truncate">${persona(p.persona).e} ${nm(p)}</p><p class="text-[11px] ${d ? 'text-korup' : 'text-reform'}">${r.title}${p.recruited ? ' (rekrutan)' : ''}</p>${p.jailed ? '<p class="text-[10px] text-zinc-500">⛓ napi</p>' : ''}</div>`; }).join('')}</div>
+      <div class="mt-10 grid md:grid-cols-2 gap-6 text-left"><div><h3 class="text-xs uppercase tracking-[.2em] text-zinc-400">📜 Linimasa</h3><ol class="mt-3 space-y-1 text-sm text-zinc-300 border-l border-white/10 pl-4">${(V.history || []).map((h) => `<li>${esc(h)}</li>`).join('')}</ol></div>
+        <div><h3 class="text-xs uppercase tracking-[.2em] text-zinc-400">🏅 Penghargaan</h3><ul class="mt-3 grid gap-2">${top('fitnah', 'Paling Sering Difitnah')}${top('pres', 'Presiden Terlama')}${top('sign', 'Penanda Tangan Petisi Terbanyak')}</ul></div></div>
+      <div class="mt-10 flex justify-center gap-3">${creator ? `<button data-a="replay" class="${btn('istana')}">🔁 Main Lagi (room sama)</button>` : '<p class="text-sm text-zinc-400 self-center">Menunggu pemegang palu membuka ronde baru…</p>'}<button data-a="leave" class="${btn('ghost')}">Keluar</button></div>
+    </main></div>`;
+  }
+
+  // ------------------------------------------------------- OVERLAY
+  function renderOverlay() {
+    let h = '';
+    const st = window.NET && window.NET.status;
+    if (st && st !== 'online' && U.screen === 'GAME') h += `<div class="fixed top-0 inset-x-0 z-[85] bg-korup text-white text-center text-xs font-semibold py-1.5">${st === 'engine-offline' ? '⏸️ Permainan dijeda: perangkat pembuat room sedang offline. Menunggu kembali…' : '📡 Menyambung ulang…'}</div>`;
+    if (U.toast) { const tone = { korup: 'ring-korup/50', istana: 'ring-istana/50', reform: 'ring-reform/50', zinc: 'ring-white/15' }[U.toast.tone] || 'ring-white/15'; h += `<div class="fixed top-8 inset-x-4 md:left-auto md:w-96 z-[80] rounded-xl px-4 py-3 ring-1 ${tone} bg-ink-800 text-sm rise shadow-2xl">${esc(U.toast.text)}</div>`; }
+    if (U.fxShow) { const f = U.fxShow, map = { inaug: 'text-istana', coin: 'text-berita', impeach: 'text-korup', veto: 'text-istana', stamp: 'text-korup' };
+      h += `<div class="fixed inset-0 z-[70] grid place-items-center bg-ink/80 backdrop-blur-sm px-6 text-center pointer-events-none"><div>${f.type === 'stamp' ? `<div class="stamp inline-block border-[6px] border-korup text-korup font-display text-6xl md:text-8xl px-6 py-2 uppercase rounded-xl">${esc(f.title)}</div><p class="mt-6 text-lg">${esc(f.sub)}</p><p class="text-xs text-zinc-500 mt-1 font-mono">KEPPRES No. ${String(V ? V.day : 0).padStart(2, '0')}/${esc(V ? V.code : '')}</p>` : `<div class="stamp font-display uppercase text-5xl md:text-7xl ${map[f.type] || ''}">${esc(f.title)}</div><p class="mt-4 text-lg text-zinc-200">${esc(f.sub)}</p>`}</div></div>`; }
+    const md = U.modal && typeof U.modal === 'object' ? U.modal : null;
+    if (md && md.type === 'keppres') h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><div class="w-[min(92vw,420px)] rounded-2xl bg-kertas text-ink p-6 rise"><p class="font-display text-3xl uppercase">Tanda Tangani Keppres?</p><p class="font-mono text-xs mt-1 opacity-60">No. ${String(V.day).padStart(2, '0')}/KEPPRES/${esc(V.code)}</p><p class="mt-4 text-lg">“${esc(md.text)}”</p>
+      <div class="mt-6 grid grid-cols-2 gap-2"><button data-a="modalClose" class="h-12 rounded-xl ring-1 ring-ink/20 font-semibold">Batal</button><button id="signHold" class="relative overflow-hidden h-12 rounded-xl bg-ink text-kertas font-semibold select-none touch-none"><span class="hold-fill absolute inset-0 bg-korup/70" style="transition-duration:.8s"></span><span class="relative">✒ Tahan untuk TTD</span></button></div></div></div>`;
+    if (md && md.type === 'appeal') h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><form data-form="appeal" class="w-[min(92vw,420px)] rounded-2xl bg-ink-800 ring-1 ring-istana/40 p-6 rise"><p class="font-display text-3xl uppercase text-istana">🙏 Mohon-Mohon</p><p class="text-sm text-zinc-400">Permohonan banding dikirim langsung ke meja Presiden. Hanya 1x per game.</p>
+      <div class="mt-3 flex flex-wrap gap-2">${['Saya punya anak istri', 'Saya siap jadi justice collaborator', 'Saya hanya disuruh', 'Ini kriminalisasi!'].map((t) => `<button type="button" data-a="appealPreset" data-v="${t}" class="text-xs rounded-full px-3 py-1 bg-white/5 ring-1 ring-white/10 hover:bg-white/10">${t}</button>`).join('')}</div>
+      <textarea id="appealText" name="t" maxlength="140" rows="3" class="mt-3 w-full rounded-xl bg-ink-900 ring-1 ring-white/10 p-3 text-sm outline-none focus:ring-istana" placeholder="Yang Mulia Bapak/Ibu Presiden…"></textarea>
+      <div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Batal</button><button class="${btn('istana')}">Ajukan Banding</button></div></form></div>`;
+    if (md && md.type === 'headline') h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><form data-form="headline" class="w-[min(92vw,460px)] rounded-2xl bg-ink-800 ring-1 ring-berita/50 p-6 rise"><p class="font-display text-3xl uppercase text-berita">📰 Hak Headline</p><p class="text-sm text-zinc-400">Tulisan Anda tayang di Breaking News pagi berikutnya sebagai “Kolom dari Balik Jeruji”. Maks. 90 karakter, sekali pakai.</p>
+      <input id="headlineText" name="t" maxlength="90" autocomplete="off" class="mt-4 w-full h-12 rounded-xl bg-kertas text-ink font-mono px-3 outline-none" placeholder="Yang menjebloskan saya…"><div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Nanti</button><button class="${btn('istana')}">Kirim ke Redaksi</button></div></form></div>`;
+    if (md && md.type === 'peek' && M && M.role) h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4" data-a="modalClose"><div class="w-[min(86vw,320px)] rise">${roleCardFront(M.role)}<div class="mt-3">${allyBox()}</div><p class="mt-3 text-xs text-zinc-500 text-center">Ketuk di mana saja untuk menutup</p></div></div>`;
+    document.getElementById('overlay').innerHTML = h;
+    bindHold();
+  }
+
+  // ------------------------------------------------------- RENDER
+  const SCREENS = { LOBBY: scrLobby, REVEAL: scrReveal, ELECTION: scrElection, NIGHT: scrNight, MORNING: scrMorning, SIDANG: scrSidang, DECISION: scrSidang, END: scrEnd };
+  function render() {
+    const app = document.getElementById('app');
+    const keep = {}; app.querySelectorAll('[data-scroll-key]').forEach((el) => { keep[el.dataset.scrollKey] = { l: el.scrollLeft, t: el.scrollTop, atBottom: el.scrollHeight - el.scrollTop - el.clientHeight < 40 }; });
+    const inputs = {}; ['chatInput', 'darkInput', 'nick'].forEach((id) => { const el = document.getElementById(id); if (el) inputs[id] = { v: el.value, f: document.activeElement === el, s: el.selectionStart }; });
+    const y = window.scrollY;
+    let html;
+    if (U.screen === 'LANDING') html = scrLanding();
+    else if (U.screen === 'IDENTITY') html = scrIdentity();
+    else if (!V || !M) html = '<div class="min-h-screen grid place-items-center text-zinc-400">⏳ Memuat ruang sidang…</div>';
+    else if (!M.role && V.phase !== 'LOBBY') html = '<div class="min-h-screen grid place-items-center text-zinc-400 p-6 text-center">⏳ Sidang sedang berjalan. Anda akan ikut di ronde berikutnya.</div>';
+    else html = (SCREENS[V.phase] || scrLobby)();
+    app.innerHTML = html;
+    app.querySelectorAll('[data-scroll-key]').forEach((el) => { const k = keep[el.dataset.scrollKey]; if (el.hasAttribute('data-autoscroll') && (!k || k.atBottom)) el.scrollTop = el.scrollHeight; else if (k) { el.scrollLeft = k.l; el.scrollTop = k.t; } });
+    Object.keys(inputs).forEach((id) => { const el = document.getElementById(id); if (el) { el.value = inputs[id].v; if (inputs[id].f) { el.focus(); try { el.setSelectionRange(inputs[id].s, inputs[id].s); } catch (e) {} } } });
+    window.scrollTo(0, y);
+    tickTimers(); renderOverlay();
+  }
+  function tickTimers() {
+    if (!V || !V.endsAt) { document.querySelectorAll('[data-timer]').forEach((e) => (e.textContent = '—')); document.querySelectorAll('[data-timer-ring]').forEach((e) => e.setAttribute('stroke-dashoffset', '0')); return; }
+    const left = Math.max(0, (V.endsAt - now()) / 1000), total = V.phaseDur || 30, sec = Math.ceil(left);
+    const txt = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+    document.querySelectorAll('[data-timer]').forEach((e) => { e.textContent = txt; e.classList.toggle('text-korup', left < 10); e.classList.toggle('animate-pulse', left < 10); });
+    document.querySelectorAll('[data-timer-ring]').forEach((e) => e.setAttribute('stroke-dashoffset', String(100.5 * (1 - left / total))));
+  }
+  setInterval(() => {
+    tickTimers();
+    if (V && V.phase === 'NIGHT') { const idx = Math.floor(Date.now() / 6000); if (idx !== U.bannerIdx) { U.bannerIdx = idx; const b = document.querySelector('[data-banner]'); if (b) b.textContent = NIGHT_BANNERS[idx % NIGHT_BANNERS.length]; } }
+  }, 250);
+
+  function bindHold() {
+    const hb = document.getElementById('holdBtn'); if (hb && !hb._b) { hb._b = 1; holdify(hb, 600, () => { U.flipped = true; const c = document.getElementById('roleCard'); if (c) c.dataset.flipped = 'true'; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} setTimeout(render, 780); }); }
+    const sh = document.getElementById('signHold'); if (sh && !sh._b) { sh._b = 1; holdify(sh, 800, () => { const md = U.modal; U.modal = null; renderOverlay(); send(md.action).then(() => { U.prisonerPick = null; }); }); }
+  }
+  function holdify(el, ms, done) {
+    let t = null; const start = (e) => { e.preventDefault(); el.classList.add('holding'); t = setTimeout(() => { t = null; el.classList.remove('holding'); done(); }, ms); };
+    const stop = () => { if (t) { clearTimeout(t); t = null; } el.classList.remove('holding'); };
+    el.addEventListener('pointerdown', start); ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => el.addEventListener(ev, stop));
+    el.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !t && !e.repeat) start(e); }); el.addEventListener('keyup', stop);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  // ------------------------------------------------------- ACTIONS
+  async function enter() {
+    const name = U.nick.trim(); if (!name || !U.persona) return;
+    LS.set('mdu_nick', name); LS.set('mdu_persona', U.persona);
+    U.busy = true; U.err = ''; render();
+    try {
+      const r = U.mode === 'local' ? await window.NET.local({ name, persona: U.persona })
+        : await window.NET.connect({ action: U.mode, code: U.joinCode.join(''), name, persona: U.persona });
+      if (r && r.err) { U.err = r.err; U.busy = false; render(); return; }
+      U.busy = false; U.screen = 'GAME'; render();
+    } catch (e) { U.err = 'Gagal terhubung: ' + (e && e.message ? e.message : e); U.busy = false; render(); }
+  }
+  const ACT = {
+    goCreate() { U.mode = 'create'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goJoin() { const code = U.joinCode.join(''); if (!/^\d{4}$/.test(code)) { U.err = 'Masukkan 4 digit kode room.'; render(); return; } U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goLocal() { U.mode = 'local'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    back() { U.screen = 'LANDING'; U.err = ''; render(); },
+    persona(v) { U.persona = v; render(); },
+    enter,
+    copyCode() { const t = V.code; try { navigator.clipboard.writeText(t).then(() => toast('⧉ Kode room disalin: ' + t), () => toast('Kode room: ' + t)); } catch (e) { toast('Kode room: ' + t); } },
+    addBot() { send({ t: 'addBot' }); },
+    kick(v) { send({ t: 'kick', id: v }); },
+    lobbyPersona(v) { send({ t: 'persona', persona: v }); },
+    autoDist() { send({ t: 'settings', settings: { auto: !V.settings.auto, dist: (V.dist && V.dist.d) || V.settings.dist } }); },
+    dist(v, el) { const d = ((V.dist && V.dist.d) || V.settings.dist).slice(); const i = +el.dataset.k; d[i] = Math.max(0, d[i] + +v); send({ t: 'settings', settings: { dist: d } }); },
+    setOpt(v, el) { const k = el.dataset.k, n = +v; send({ t: 'settings', settings: k === 'scandalTarget' ? { scandalTarget: n } : { timers: { [k]: n } } }); },
+    start() { send({ t: 'start' }); },
+    leave() {
+      if (V && !['LOBBY', 'END'].includes(V.phase) && !(U.leaveArmed && Date.now() - U.leaveArmed < 4000)) { U.leaveArmed = Date.now(); toast('Ketuk "Keluar" sekali lagi untuk meninggalkan sidang yang sedang berjalan.', 'korup'); return; }
+      send({ t: 'leave' }); window.NET.leave(); resetToLanding();
+    },
+    hideCard() { U.flipped = false; render(); },
+    ready() { send({ t: 'ready' }); },
+    vote(v) { send({ t: 'vote', cand: v }); },
+    sel(v, el) { U.sel[el.dataset.k] = v; render(); },
+    tab(v) { U.sel.tab = v; U.sel.target = null; U.modal = null; render(); },
+    kpkTab(v) { U.sel.kpk = v; U.sel.target = null; render(); },
+    confirmRecruit() { U.modal = 'confirmRecruit'; render(); },
+    survey(v) { const [q, o] = v.split(':').map(Number); U.sel.survey[q] = o; render(); },
+    wall() { U.wall = (U.wall + 1) % 30; render(); },
+    nact(kind) { U.modal = null; send({ t: 'night', kind, target: U.sel.target }); },
+    nskip() { send({ t: 'night', kind: 'DUMMY' }); },
+    korSubmit() { send({ t: 'night', kind: 'SCANDAL', target: U.sel.target, card: U.sel.card || (M.hand || [])[0] }); },
+    korAgree() { send({ t: 'night', kind: 'AGREE' }); },
+    pltSubmit() { send({ t: 'night', kind: 'SCANDAL', target: U.sel.pltTarget, card: U.sel.pltCard || (M.hand || [])[0] }).then((r) => { if (r && r.ok) toast('🐀 Kasus fiktif terdaftar. Sekarang jalankan aksi role Anda.', 'korup'); }); },
+    mtab(v) { U.mobileTab = v; render(); },
+    react(v) { send({ t: 'react', emoji: v }); },
+    sign() { send({ t: 'sign', on: !M.signed }); },
+    skip() { send({ t: 'skip' }); },
+    testify() { send({ t: 'testify' }); },
+    appeal() { U.modal = { type: 'appeal' }; renderOverlay(); },
+    appealPreset(v) { const t = document.getElementById('appealText'); if (t) t.value = v; },
+    headline() { U.modal = { type: 'headline' }; renderOverlay(); },
+    peek() { U.modal = { type: 'peek' }; renderOverlay(); },
+    modalClose() { U.modal = null; render(); },
+    veto(v) { send({ t: 'veto', case: v }); },
+    presDrawer() { U.presDrawer = !U.presDrawer; render(); },
+    freeToggle() { U.prisonerPick = U.prisonerPick === null ? -1 : null; render(); },
+    pickPrisoner(v) { U.prisonerPick = v; render(); },
+    appealPick(v) { U.prisonerPick = v; render(); },
+    decide(kind, el) {
+      let text = '', action = { t: 'decide', kind };
+      if (kind === 'JAIL') { const s = el.dataset.s; action.suspect = s; const c = openCases().find((x) => x.suspect === s); text = `Menjebloskan ${P(s).name} atas ${c && c.kind === 'KPK' ? 'penetapan OTT KPK' : c ? card(c.card).title : 'tuduhan'}.`; }
+      else if (kind === 'FREE') { action.prisoner = U.prisonerPick; text = `Membebaskan ${P(U.prisonerPick).name} dari Rutan Negara.`; }
+      else text = 'Tidak mengambil tindakan. Tuduhan dikesampingkan.';
+      U.modal = { type: 'keppres', action, text }; renderOverlay();
+    },
+    replay() { send({ t: 'replay' }); },
+  };
+
+  document.addEventListener('click', (e) => { const a = e.target.closest('[data-a]'); if (!a || a.disabled) return; const f = ACT[a.dataset.a]; if (f) f(a.dataset.v, a); });
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'nick') { U.nick = e.target.value; const c = document.getElementById('nickCount'); if (c) c.textContent = `${U.nick.length}/14`; const b = document.querySelector('[data-a="enter"]'); if (b) b.disabled = !(U.persona && U.nick.trim()); }
+    if (e.target.dataset && e.target.dataset.otp != null) { const i = +e.target.dataset.otp; e.target.value = e.target.value.replace(/\D/g, '').slice(-1); U.joinCode[i] = e.target.value; if (e.target.value && i < 3) document.querySelector(`[data-otp="${i + 1}"]`).focus(); }
+  });
+  document.addEventListener('paste', (e) => { if (e.target.dataset && e.target.dataset.otp != null) { const t = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 4); if (t.length === 4) { e.preventDefault(); U.joinCode = t.split(''); render(); } } });
+  document.addEventListener('keydown', (e) => {
+    if (e.target.dataset && e.target.dataset.otp != null) { if (e.key === 'Backspace' && !e.target.value) { const i = +e.target.dataset.otp; if (i > 0) document.querySelector(`[data-otp="${i - 1}"]`).focus(); } if (e.key === 'Enter') ACT.goJoin(); }
+    if (e.target.id === 'nick' && e.key === 'Enter') enter();
+  });
+  document.addEventListener('submit', (e) => {
+    e.preventDefault(); const f = e.target, t = ((f.t && f.t.value) || '').trim();
+    if (f.dataset.form === 'chat') { if (!t) return; f.t.value = ''; send(me() && me().jailed ? { t: 'letter', text: t } : { t: 'chat', text: t }); }
+    if (f.dataset.form === 'dark') { if (!t) return; f.t.value = ''; send({ t: 'dark', text: t }); }
+    if (f.dataset.form === 'appeal') { U.modal = null; renderOverlay(); send({ t: 'appeal', text: t }).then((r) => { if (r && r.ok) toast('📨 Banding terkirim ke meja Presiden.', 'istana'); }); }
+    if (f.dataset.form === 'headline') { if (!t) return; U.modal = null; renderOverlay(); send({ t: 'headline', text: t }); }
+  });
+
+  // join code dari URL hash (#6262) memudahkan berbagi
+  const m = /^#(\d{4})$/.exec(location.hash || ''); if (m) U.joinCode = m[1].split('');
+  render();
+  if (window.NET && window.NET.init) window.NET.init();
+})();
+
+</script>
+</body>
+</html>
