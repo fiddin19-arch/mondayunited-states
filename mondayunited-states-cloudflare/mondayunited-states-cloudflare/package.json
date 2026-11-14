@@ -1,0 +1,13 @@
+{
+  "name": "mondayunited-states",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Game social deduction satir birokrasi Indonesia — multiplayer di Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}
