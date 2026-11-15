@@ -130,4 +130,5 @@ Kalau batas harian habis, room baru gagal dibuat sampai reset. Untuk main bareng
 - **Reformis** (KPK, Jurnalis, Pengamat Politik, Guru Besar, Warga Sipil) menang jika semua anggota Faksi Gelap dipenjara.
 - Presiden dipilih dari 2 kandidat acak, menjabat 2 putaran, imun dari fitnah dan rekrut, dan memutuskan apakah tuduhan sah.
 - KPK bisa **Sadap** (tahu faksi) atau **OTT** (target Faksi Gelap langsung jadi Tersangka).
+- Jika KPK dipenjara (atau kehilangan role karena dibebaskan), satu Warga Sipil bebas diam-diam diangkat menjadi **KPK pengganti**.
 - Halaman depan juga punya mode **latihan solo** melawan bot.

@@ -282,9 +282,20 @@ tailwind.config = {
   function dealHand(G) { if (G.deck.length < 5) G.deck = shuffle(CARDS.map((c) => c.id)); return G.deck.slice(0, 5); }
   function startNight(G, now) {
     if (G.day >= MAX_DAYS) { G.winner = 'GELAP'; G.reason = `Hari ke-${MAX_DAYS} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
-    G.day++; G.cases = []; G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
+    G.day++; G.cases = [];
+    appointPltKpk(G); G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
     G.hand = dealHand(G); G.korChoice = null; G.nightActs = {}; G.decided = false; G.appeals = [];
     setPhase(G, 'NIGHT', G.settings.timers.night, now);
+  }
+  // Penyidik pengganti: jika tidak ada KPK yang bebas, satu Warga Sipil bebas diam-diam diangkat jadi KPK
+  function appointPltKpk(G) {
+    if (G.players.some((p) => p.role === 'KPK' && !p.jailed)) return;
+    if (!G.players.some((p) => p.role === 'KPK') && !G.kpkEverJailed) return; // game tanpa KPK sejak awal
+    const pool = free(G).filter((p) => p.role === 'WARGA' && p.id !== G.presidentId);
+    if (!pool.length) return;
+    const p = rnd(pool); p.role = 'KPK'; p.pltKpk = true; G.kpkEverJailed = true;
+    G.history.push(`Malam ${G.day}: penyidik pengganti KPK diangkat diam-diam`);
+    note(G, p.id, '🕵️ Anda diangkat diam-diam menjadi PENYIDIK KPK pengganti. Mulai malam ini Anda bisa Sadap atau OTT. Cek kartu role Anda.', 'reform');
   }
   function validTarget(G, me, tid, opts) {
     const t = P(G, tid); if (!t || t.jailed) return null;
@@ -449,7 +460,7 @@ tailwind.config = {
     if (kind === 'JAIL') {
       const c = openCases(G).find((x) => x.suspect === pid) || (pid == null ? openCases(G)[0] : null);
       if (!c) return { err: 'Tidak ada tersangka untuk dijebloskan.' };
-      const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects();
+      const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects(); if (s.role === 'KPK') G.kpkEverJailed = true;
       title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${c.kind === 'KPK' ? 'penetapan KPK' : card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
       if (s.role === 'JURNALIS') {
         if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
