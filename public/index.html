@@ -804,40 +804,60 @@ window.makeLocalPlay = function () {
 
 </script>
 <script>
-/* Jalur B: klien WebSocket ke server Node (server.js). Server = host; semua pemain setara. */
+/* Jalur B (Cloudflare): klien WebSocket ke Durable Object per room. Tidak ada pemain yang menjadi host. */
 (function () {
   const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
-  let token = LS.get('mdu_token'); if (!token) { token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''); LS.set('mdu_token', token); }
-  let ws = null, ready = false, backoff = 500, seq = 0, inRoom = !!LS.get('mdu_code');
+  let token = LS.get('mdu_token'); if (!token || !/^[a-f0-9]{32}$/.test(token)) { token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''); LS.set('mdu_token', token); }
+  let ws = null, ready = false, backoff = 600, seq = 0, code = LS.get('mdu_code'), want = !!code, timer = null;
   const waiters = {}, queue = [];
   const local = window.makeLocalPlay();
   const NET = window.NET = {
-    label: 'Server publik', status: 'online', active: 'remote',
-    init() { open(); },
+    label: 'Cloudflare', status: 'online', active: 'remote',
+    init() { if (code) open(true); },
     async local(info) { NET.active = 'local'; return local.start(info); },
-    connect({ action, code, name, persona }) {
-      NET.active = 'remote';
-      return request(action === 'create' ? { t: 'create', name, persona } : { t: 'join', code, name, persona }).then((r) => { if (r && r.code) { LS.set('mdu_code', r.code); inRoom = true; try { history.replaceState(null, '', '#' + r.code); } catch (e) {} } return r; });
+    async connect({ action, code: c, name, persona }) {
+      NET.active = 'remote'; close();
+      if (action === 'create') {
+        try { const r = await fetch('/api/create', { method: 'POST' }); const j = await r.json(); if (j.err) return j; c = j.code; }
+        catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+      }
+      code = c; want = true; open(false);
+      const r = await request({ t: 'join', name, persona });
+      if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} }
+      else { want = false; close(); code = null; }
+      return r;
     },
     send(a) { if (NET.active === 'local') return local.send(a); return request({ t: 'act', a }); },
-    leave() { if (NET.active === 'local') { local.stop(); NET.active = 'remote'; return; } LS.del('mdu_code'); inRoom = false; raw({ t: 'leave' }); try { history.replaceState(null, '', location.pathname); } catch (e) {} },
+    leave() {
+      if (NET.active === 'local') { local.stop(); NET.active = 'remote'; return; }
+      want = false; LS.del('mdu_code'); setTimeout(close, 300); code = null; try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    },
   };
   function setStatus(s) { if (NET.status !== s) { NET.status = s; window.APP && window.APP.onStatus(); } }
   function raw(m) { if (ws && ready) ws.send(JSON.stringify(m)); else queue.push(m); }
-  function request(m) { return new Promise((res) => { const id = ++seq; m.id = id; waiters[id] = res; raw(m); setTimeout(() => { if (waiters[id]) { delete waiters[id]; res({ err: 'Server tidak menjawab. Coba lagi.' }); } }, 10000); }); }
-  function open() {
-    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
-    try { ws = new WebSocket(url); } catch (e) { setTimeout(open, backoff); return; }
-    ws.onopen = () => { ready = false; ws.send(JSON.stringify({ t: 'hello', token, code: inRoom ? LS.get('mdu_code') : null })); };
-    ws.onmessage = (ev) => {
+  function request(m) { return new Promise((res) => { const id = ++seq; m.id = id; waiters[id] = res; raw(m); setTimeout(() => { if (waiters[id]) { delete waiters[id]; res({ err: 'Server tidak menjawab. Coba lagi.' }); } }, 12000); }); }
+  function close() { clearTimeout(timer); if (ws) { const w = ws; ws = null; ready = false; try { w.onclose = null; w.close(); } catch (e) {} } }
+  function open(rejoin) {
+    if (!code) return;
+    const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/' + code;
+    let sock; try { sock = new WebSocket(url); } catch (e) { timer = setTimeout(() => open(true), backoff); return; }
+    ws = sock; ready = false;
+    sock.onopen = () => sock.send(JSON.stringify({ t: 'hello', token, rejoin: !!rejoin }));
+    sock.onmessage = (ev) => {
+      if (sock !== ws) return;
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
-      if (m.t === 'welcome') { ready = true; backoff = 500; setStatus('online'); while (queue.length) ws.send(JSON.stringify(queue.shift())); if (m.lost && NET.active === 'remote') { LS.del('mdu_code'); inRoom = false; } return; }
+      if (m.t === 'welcome') {
+        ready = true; backoff = 600; setStatus('online');
+        while (queue.length) sock.send(JSON.stringify(queue.shift()));
+        if (m.lost && NET.active === 'remote') { want = false; LS.del('mdu_code'); code = null; close(); window.APP.resetToLanding('Sidang sebelumnya sudah tidak tersedia.'); }
+        return;
+      }
       if (m.t === 'reply') { const w = waiters[m.id]; if (w) { delete waiters[m.id]; w(m.res); } return; }
       if (m.t === 'state' && NET.active === 'remote') { window.APP.onState(m.pub, m.priv); return; }
-      if (m.t === 'kicked' && NET.active === 'remote') { LS.del('mdu_code'); inRoom = false; window.APP.resetToLanding(m.msg || 'Anda dikeluarkan dari room.'); }
+      if (m.t === 'kicked' && NET.active === 'remote') { want = false; LS.del('mdu_code'); code = null; close(); window.APP.resetToLanding(m.msg || 'Anda dikeluarkan dari room.'); }
     };
-    ws.onclose = () => { ready = false; if (inRoom && NET.active === 'remote') setStatus('reconnecting'); setTimeout(open, backoff); backoff = Math.min(8000, backoff * 1.7); };
-    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    sock.onclose = () => { if (sock !== ws) return; ready = false; ws = null; if (want && NET.active === 'remote') { setStatus('reconnecting'); timer = setTimeout(() => open(true), backoff); backoff = Math.min(8000, backoff * 1.7); } };
+    sock.onerror = () => { try { sock.close(); } catch (e) {} };
   }
 })();
 
@@ -894,6 +914,7 @@ window.makeLocalPlay = function () {
     }
     if (priv !== undefined) {
       M = priv;
+      if (M && U.signPending && M.signed === U.signPending.want) U.signPending = null;
       if (M && M.notes) { const fresh = M.notes.filter((n) => n.id > U.seenNotes); if (fresh.length) { U.seenNotes = fresh[fresh.length - 1].id; LS.set('mdu_seen_notes', U.seenNotes); fresh.forEach((n, i) => setTimeout(() => toast(n.text, n.tone), i * 1600)); } }
     }
     if (V && M) U.screen = 'GAME';
@@ -1244,7 +1265,15 @@ window.makeLocalPlay = function () {
       <div class="relative mt-3 h-3 rounded-full bg-white/10 overflow-hidden"><div class="h-full bg-gradient-to-r from-berita to-korup transition-[width] duration-500" style="width:${pct}%"></div><div class="absolute left-1/2 top-0 h-full w-0.5 bg-white/70"></div></div>
       <div class="flex justify-between text-[10px] text-zinc-500 mt-1"><span>0%</span><span>ambang 50%</span><span>100%</span></div>
       <p class="text-xs text-zinc-400 mt-2">${needed - eff > 0 ? `Butuh ${needed - eff} tanda tangan lagi.` : 'Ambang tercapai!'} Nama penanda tangan dirahasiakan.</p>
-      ${canSign ? `<button data-a="sign" class="${btn(signed ? 'korup' : 'ghost')} w-full mt-3 h-11">${signed ? '✓ Sudah Tanda Tangan (Tarik?)' : '✍ Tanda Tangan Petisi'}</button>` : mine.jailed ? '<p class="text-xs text-zinc-500 mt-3">⛓ Napi tidak bisa ikut demo.</p>' : isPres() ? '<p class="text-xs text-istana mt-3">Anda Presiden. Petisi ini tentang Anda 👀</p>' : V.decided ? '<p class="text-xs text-zinc-500 mt-3">Petisi dibekukan setelah Keppres.</p>' : ''}</div>`;
+      ${canSign ? signControl(signed) : mine.jailed ? '<p class="text-xs text-zinc-500 mt-3">⛓ Napi tidak bisa ikut demo.</p>' : isPres() ? '<p class="text-xs text-istana mt-3">Anda Presiden. Petisi ini tentang Anda 👀</p>' : V.decided ? '<p class="text-xs text-zinc-500 mt-3">Petisi dibekukan setelah Keppres.</p>' : ''}</div>`;
+  }
+  function signControl(signed) {
+    const sp = U.signPending;
+    if (sp && Date.now() - sp.at < 6000) return `<button disabled class="${btn('ghost')} w-full mt-3 h-11">⏳ ${sp.want ? 'Mengirim tanda tangan…' : 'Menarik tanda tangan…'}</button>`;
+    if (!signed) return `<button data-a="sign" class="${btn('korup')} w-full mt-3 h-11">✍ Tanda Tangan Petisi</button>`;
+    const armed = U.unsignArmed && Date.now() - U.unsignArmed < 4000;
+    return `<div class="mt-3 rounded-xl bg-reform-soft ring-1 ring-reform/40 px-4 py-3 text-sm text-reform font-semibold">✓ Anda sudah menandatangani petisi</div>
+      <button data-a="unsign" class="mt-2 w-full h-9 rounded-lg text-xs ${armed ? 'bg-korup text-white font-semibold' : 'text-zinc-400 underline underline-offset-4 hover:text-zinc-200'}">${armed ? 'Ketuk sekali lagi untuk menarik tanda tangan' : 'Tarik tanda tangan'}</button>`;
   }
   function presidentPanel(active) {
     const P0 = M.president || { vetoAvailable: false, appeals: [] }, oc = openCases(), prisoners = V.players.filter((p) => p.jailed), rep = P0.expertReport || null;
@@ -1416,6 +1445,11 @@ window.makeLocalPlay = function () {
       U.busy = false; U.screen = 'GAME'; render();
     } catch (e) { U.err = 'Gagal terhubung: ' + (e && e.message ? e.message : e); U.busy = false; render(); }
   }
+  function signSend(want) {
+    U.signPending = { want, at: Date.now() }; render();
+    send({ t: 'sign', on: want }).then((r) => { if (r && r.err) { U.signPending = null; render(); } });
+    setTimeout(() => { if (U.signPending && U.signPending.want === want) { U.signPending = null; render(); } }, 6000);
+  }
   const ACT = {
     goCreate() { U.mode = 'create'; U.err = ''; U.screen = 'IDENTITY'; render(); },
     goJoin() { const code = U.joinCode.join(''); if (!/^\d{4}$/.test(code)) { U.err = 'Masukkan 4 digit kode room.'; render(); return; } U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
@@ -1451,7 +1485,12 @@ window.makeLocalPlay = function () {
     pltSubmit() { send({ t: 'night', kind: 'SCANDAL', target: U.sel.pltTarget, card: U.sel.pltCard || (M.hand || [])[0] }).then((r) => { if (r && r.ok) toast('🐀 Kasus fiktif terdaftar. Sekarang jalankan aksi role Anda.', 'korup'); }); },
     mtab(v) { U.mobileTab = v; render(); },
     react(v) { send({ t: 'react', emoji: v }); },
-    sign() { send({ t: 'sign', on: !M.signed }); },
+    sign() { if (M.signed || (U.signPending && Date.now() - U.signPending.at < 6000)) return; signSend(true); },
+    unsign() {
+      if (!M.signed) return;
+      if (!(U.unsignArmed && Date.now() - U.unsignArmed < 4000)) { U.unsignArmed = Date.now(); render(); setTimeout(render, 4100); return; }
+      U.unsignArmed = 0; signSend(false);
+    },
     skip() { send({ t: 'skip' }); },
     testify() { send({ t: 'testify' }); },
     appeal() { U.modal = { type: 'appeal' }; renderOverlay(); },
