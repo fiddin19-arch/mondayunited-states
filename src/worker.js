@@ -32,7 +32,16 @@ export default {
       if (request.headers.get('Upgrade') !== 'websocket') return new Response('Butuh WebSocket', { status: 426 });
       return env.ROOMS.get(env.ROOMS.idFromName(m[1])).fetch(request);
     }
-    if (env.ASSETS) return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      // Halaman utama: isi alamat absolut untuk gambar pratinjau (og:image) sesuai domain yang dipakai.
+      if (url.pathname === '/' || url.pathname === '/index.html') {
+        const r = await env.ASSETS.fetch(new Request(url.origin + '/', { headers: request.headers }));
+        if (r.status !== 200) return r;
+        const html = (await r.text()).split('__ORIGIN__').join(url.origin);
+        return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
+      }
+      return env.ASSETS.fetch(request);
+    }
     return new Response('not found', { status: 404 });
   },
 };
