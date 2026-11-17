@@ -1,0 +1,16 @@
+{
+  // Mondayunited States — konfigurasi Cloudflare Workers
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mondayunited-states",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": true }
+}

@@ -129,6 +129,7 @@ Kalau batas harian habis, room baru gagal dibuat sampai reset. Untuk main bareng
 - Pemakzulan pertama hanya peringatan (tidak boleh ikut pemilu kilat yang sama). Pemakzulan **kedua** membuat Presiden **cacat politik permanen**. Jika tidak ada kandidat sama sekali, sistem mengundi **Plt. Presiden** untuk 1 putaran tanpa Hak Veto. Jika semua Koruptor dipenjara, tidak ada lagi fitnah: sisa Faksi Gelap hanya bisa mengulur waktu.
 - **Reformis** (KPK, Jurnalis, Pengamat Politik, Guru Besar, Warga Sipil) menang jika semua anggota Faksi Gelap dipenjara.
 - Presiden dipilih dari 2 kandidat acak, menjabat 2 putaran, imun dari fitnah dan rekrut, dan memutuskan apakah tuduhan sah.
-- KPK bisa **Sadap** (tahu faksi) atau **OTT** (target Faksi Gelap langsung jadi Tersangka).
+- KPK bisa **Sadap** (tahu faksi) atau **OTT** (target jadi Tersangka, siapa pun dia; berkasnya tampil sama dengan tuduhan Koruptor).
+- Koruptor menulis **Berita Jelek** (fitnah) atau **Berita Bagus** (pencitraan: target kebal OTT malam itu). Jurnalis membatalkan berita Koruptor apa pun pada target yang ia cek.
 - Jika KPK dipenjara (atau kehilangan role karena dibebaskan), satu Warga Sipil bebas diam-diam diangkat menjadi **KPK pengganti**.
 - Halaman depan juga punya mode **latihan solo** melawan bot.

@@ -1,4 +1,4 @@
-/* Mondayunited States — mesin permainan (aturan v1.2)
+/* Mondayunited States — mesin permainan (aturan v1.9)
  * Murni JavaScript, tanpa DOM. Dipakai oleh server Node (jalur B) dan oleh
  * perangkat pembuat room di versi link Claude (jalur A).
  * State G sepenuhnya JSON-serializable sehingga bisa disimpan & dilanjutkan.
@@ -24,11 +24,11 @@
   const BOT_NAMES = ['Budi', 'Sri', 'Joko', 'Ani', 'Rudi', 'Mega', 'Tono', 'Ucup', 'Wati', 'Dedi', 'Lina', 'Asep'];
   const DARK_ROLES = ['KORUPTOR', 'BROKER', 'BUZZER'];
   const ROLES = {
-    KORUPTOR: { icon: '🐀', title: 'Koruptor', fac: 'GELAP', desc: 'Anda tidak korupsi, Anda <i>mengoptimalkan anggaran</i>. Setiap malam, fitnah satu warga dengan skandal fiktif.', action: 'Pilih Target Kasus Fiktif' },
+    KORUPTOR: { icon: '🐀', title: 'Koruptor', fac: 'GELAP', desc: 'Anda tidak korupsi, Anda <i>mengoptimalkan anggaran</i>. Setiap malam tulis satu berita fiktif: BERITA JELEK (fitnah satu warga jadi Tersangka) atau BERITA BAGUS (pencitraan yang menggagalkan OTT KPK pada satu orang, termasuk sekutu Anda).', action: 'Tulis Berita Fiktif' },
     BROKER: { icon: '🤝', title: 'Broker', fac: 'GELAP', desc: 'Penghubung antara yang butuh dan yang punya. Komisi 10% sudah termasuk pajak. Sekali per game, rekrut satu Warga Sipil menjadi Buzzer.', action: 'Gunakan Hak Rekrut Broker (1x)' },
     BUZZER: { icon: '📣', title: 'Buzzer', fac: 'GELAP', desc: 'Satu akun, seribu suara. Bayarannya nasi kotak. Setiap malam, balikkan suara satu pemain untuk esok hari.', action: 'Balikkan Suara Target' },
-    KPK: { icon: '🕵️', title: 'Penyidik KPK', fac: 'REFORMIS', desc: 'Gaji UMR, tanggung jawab negara. Setiap malam pilih satu: SADAP (Anda tahu faksi target) atau OTT (jika target Faksi Gelap, ia jadi Tersangka besok; jika bersih, berita mengumumkan OTT salah sasaran).', action: 'Sadap atau OTT' },
-    JURNALIS: { icon: '🎙️', title: 'Jurnalis Investigasi', fac: 'REFORMIS', desc: 'Deadline jam 5, klarifikasi jam 5 lewat 1. Setiap malam, cek fakta satu pemain: fitnah ke dia jadi HOAKS. Kalau dijebloskan Presiden, Anda dapat Hak Headline.', action: 'Cek Fakta Satu Pemain' },
+    KPK: { icon: '🕵️', title: 'Penyidik KPK', fac: 'REFORMIS', desc: 'Gaji UMR, tanggung jawab negara. Setiap malam pilih satu: SADAP (Anda tahu faksi target) atau OTT (target jadi Tersangka besok, siapa pun dia). Berkas OTT tampil sama persis dengan berita tuduhan Koruptor, jadi sadap dulu sebelum OTT supaya tidak salah sasaran.', action: 'Sadap atau OTT' },
+    JURNALIS: { icon: '🎙️', title: 'Jurnalis Investigasi', fac: 'REFORMIS', desc: 'Deadline jam 5, klarifikasi jam 5 lewat 1. Setiap malam, cek fakta satu pemain: berita Koruptor tentang dia (jelek maupun bagus) dibatalkan. Kalau yang dibatalkan berita bagus, hanya Anda yang tahu bahwa ia dapat pencitraan Koruptor. Kalau dijebloskan Presiden, Anda dapat Hak Headline.', action: 'Cek Fakta Satu Pemain' },
     PENGAMAT: { icon: '📊', title: 'Pengamat Politik', fac: 'REFORMIS', desc: 'Analisis saya selalu tepat, setelah kejadian. Setiap malam, amati satu pemain dan ketahui siapa yang ia datangi.', action: 'Amati Pergerakan Satu Pemain' },
     GURU_BESAR: { icon: '🧑‍🏫', title: 'Guru Besar', fac: 'REFORMIS', desc: 'Menurut kajian saya (halaman 3 dari 400)… Sekali per game saat Sidang, serahkan Kesaksian Ahli: Presiden tahu faksi asli Tersangka.', action: 'Kesaksian Ahli ke Presiden (1x, siang)' },
     WARGA: { icon: '🧍', title: 'Warga Sipil', fac: 'REFORMIS', desc: 'Tidak punya kuasa, hanya punya kuota. Senjata Anda: debat di Sidang, coblosan, dan petisi.', action: null },
@@ -81,6 +81,9 @@
 
   const FIXED_T = { reveal: 60, election: 45, morning: 9, decision: 30 };
   const MAX_DAYS = 20;
+  // Aturan yang bisa diubah per room (untuk penyeimbangan). Default = aturan standar.
+  const DEFAULT_RULES = { maxDays: 20, fitnahCooldown: false, impeachFrac: 0.5, darkTerms: 3, grasi: false, kpkDual: false };
+  const R = (G, k) => (G.settings && G.settings.rules && G.settings.rules[k] != null ? G.settings.rules[k] : DEFAULT_RULES[k]);
   const MIN_PLAYERS = 6, MAX_PLAYERS = 12;
 
   // --------------------------------------------------------------- HELPERS
@@ -114,7 +117,7 @@
     now = now || Date.now();
     return {
       v: 3, code: String(code), creatorId, phase: 'LOBBY', phaseStart: now, phaseDur: 0, endsAt: 0, pending: null, rev: 1, seq: 0,
-      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5 },
+      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {} },
       players: [], day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true,
       cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null,
       nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null,
@@ -164,7 +167,7 @@
     if (!dc.valid) return { err: 'Komposisi role tidak valid untuk jumlah pemain ini.' };
     const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
     shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
-    Object.assign(G, { day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    Object.assign(G, { sadapNight: {}, lastBadDay: -9, grasiUsed: false, day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
     G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
     setPhase(G, 'REVEAL', FIXED_T.reveal, now);
     return { ok: true };
@@ -205,7 +208,7 @@
   }
   function install(G, win, how, now, coin, plt) {
     const p = P(G, win);
-    G.presidentId = win; G.plt = !!plt; G.term = { n: G.term.n + 1, round: plt ? 2 : 1 }; G.vetoAvailable = !plt; stat(G, win, 'pres');
+    G.presidentId = win; G.plt = !!plt; G.grasiUsed = false; G.term = { n: G.term.n + 1, round: plt ? 2 : 1 }; G.vetoAvailable = !plt; stat(G, win, 'pres');
     if (p.role === 'KORUPTOR' && !plt) G.darkTerms++;
     sys(G, `👑 ${p.name} dilantik sebagai ${plt ? 'Plt. Presiden' : 'Presiden'} (${how}).`);
     G.history.push(plt ? `Kursi kosong: ${p.name} jadi Plt. Presiden` : `Pemilu: ${p.name} jadi Presiden`);
@@ -217,7 +220,7 @@
   // ----------------------------------------------------------------- NIGHT
   function dealHand(G) { if (G.deck.length < 5) G.deck = shuffle(CARDS.map((c) => c.id)); return G.deck.slice(0, 5); }
   function startNight(G, now) {
-    if (G.day >= MAX_DAYS) { G.winner = 'GELAP'; G.reason = `Hari ke-${MAX_DAYS} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
+    if (G.day >= R(G, 'maxDays')) { G.winner = 'GELAP'; G.reason = `Hari ke-${R(G, 'maxDays')} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
     G.day++; G.cases = [];
     appointPltKpk(G); G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
     G.hand = dealHand(G); G.korChoice = null; G.nightActs = {}; G.decided = false; G.appeals = [];
@@ -240,36 +243,43 @@
     if (opts.notPres && t.id === G.presidentId) return null;
     return t;
   }
+  // Berita Koruptor: JELEK (fitnah, target non-Dark) atau BAGUS (pencitraan, target siapa pun kecuali Presiden)
+  function setKorChoice(G, me, a) {
+    const good = !!a.good;
+    if (!good && R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1) return { err: 'Redaksi sedang diawasi: malam ini hanya boleh berita bagus.' };
+    const t = validTarget(G, me, a.target, good ? { self: true, notPres: true } : { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
+    if (!good && !G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
+    G.korChoice = { target: t.id, card: good ? null : a.card, by: me.id, good };
+    return null;
+  }
   function nightAction(G, me, a, now) {
     if (G.phase !== 'NIGHT' || G.pending) return { err: 'Bukan waktunya.' };
     if (me.jailed) return { err: 'Napi tidak beraksi malam hari.' };
     const r = me.role, k = a.kind;
     // Plt. Koruptor: Broker/Buzzer memilih kasus fiktif tanpa menghabiskan aksi role-nya
     if (k === 'SCANDAL' && r !== 'KORUPTOR') {
-      if (!scandalActors(G).some((p) => p.id === me.id)) return { err: 'Hanya Koruptor yang bisa memfitnah.' };
-      const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
-      if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
-      G.korChoice = { target: t.id, card: a.card, by: me.id }; return { ok: true };
+      if (!scandalActors(G).some((p) => p.id === me.id)) return { err: 'Hanya Koruptor yang bisa menulis berita.' };
+      const e = setKorChoice(G, me, a); if (e) return e; return { ok: true };
     }
     if (G.nightActs[me.id] && me.role !== 'KORUPTOR') return { err: 'Aksi sudah terkirim.' };
     if (k === 'DUMMY') { /* lewati malam: semua role boleh */ }
     else if (r === 'KORUPTOR') {
-      if (k === 'SCANDAL') {
-        const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
-        if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
-        G.korChoice = { target: t.id, card: a.card, by: me.id };
-      } else if (k !== 'AGREE' || !G.korChoice) return { err: 'Pilih target dan kartu.' };
+      if (k === 'SCANDAL') { const e = setKorChoice(G, me, a); if (e) return e; }
+      else if (k !== 'AGREE' || !G.korChoice) return { err: 'Pilih target dan kartu.' };
     } else if (r === 'BROKER') {
       if (k === 'RECRUIT') { if (G.recruitUsed) return { err: 'Hak rekrut sudah terpakai.' }; if (!validTarget(G, me, a.target, { notDark: true, notPres: true })) return { err: 'Target tidak valid.' }; }
       else if (k !== 'PASS') return { err: 'Aksi tidak valid.' };
     } else if (r === 'BUZZER') { if (k !== 'FLIP' || !validTarget(G, me, a.target, {})) return { err: 'Target tidak valid.' }; }
     else if (r === 'KPK') {
       if (k === 'OTT') {
-        if (!validTarget(G, me, a.target, { notPres: true })) return { err: 'Target tidak valid (Presiden imun).' };
+        const t = validTarget(G, me, a.target, { notPres: true }); if (!t) return { err: 'Target tidak valid (Presiden imun).' };
+        if (!(G.investigations[me.id] || []).some((i) => i.id === t.id)) note(G, me.id, `⚠️ OTT ke ${t.name} tanpa sadap lebih dulu: berkasnya tetap terbit walau ia bersih.`, 'zinc');
       } else {
         const t = k === 'INVESTIGATE' && validTarget(G, me, a.target, {}); if (!t) return { err: 'Target tidak valid.' };
         const fac = isDark(t) ? 'GELAP' : 'REFORMIS';
         (G.investigations[me.id] = G.investigations[me.id] || []).push({ id: t.id, fac, night: G.day });
+        // Aturan kpkDual: sadap tidak menghabiskan malam. KPK masih bisa OTT (atau selesai) setelah melihat hasil sadap.
+        if (R(G, 'kpkDual') && (G.sadapNight = G.sadapNight || {})[me.id] !== G.day) { G.sadapNight[me.id] = G.day; return { ok: true, sadap: true }; }
       }
     } else if (r === 'JURNALIS') {
       if (k !== 'FACTCHECK' || !validTarget(G, me, a.target, { self: true }) || a.target === G.lastProtected[me.id]) return { err: 'Target tidak valid.' };
@@ -282,6 +292,10 @@
   function maybeEndNight(G, now) {
     if (G.pending) return;
     if (free(G).filter(active).every((p) => G.nightActs[p.id])) later(G, 'resolveNight', 1800, now);
+  }
+  function mkCase(G, src, sid, cid) {
+    const n = G.cases.length + 1, c = { id: 'C' + n, src, suspect: sid, card: cid, no: `KS/${pad2(G.day)}/${G.code}/${n}`, vetoed: false };
+    G.cases.push(c); P(G, sid).suspect = true; return c;
   }
   function resolveNight(G, now) {
     const acts = G.nightActs, visits = {};
@@ -302,18 +316,18 @@
     // 2. Jurnalis cek fakta
     const protectedSet = new Set();
     for (const j of byRole('JURNALIS')) { const a = acts[j.id]; if (a && a.kind === 'FACTCHECK') { protectedSet.add(a.target); visits[j.id] = a.target; G.lastProtected[j.id] = a.target; } else delete G.lastProtected[j.id]; }
-    // 3. Koruptor
-    let tgt = null, cid = null;
+    // 3. Koruptor: berita JELEK (fitnah) atau berita BAGUS (pencitraan)
+    let tgt = null, cid = null, good = false;
     const kor = scandalActors(G);
     if (!G.korChoice && kor.length && kor.every((k) => k.bot)) botScandal(G, rnd(kor));
-    if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; visits[G.korChoice.by] = tgt; } }
+    if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; good = !!G.korChoice.good; visits[G.korChoice.by] = tgt; } }
     if (cid) G.deck = G.deck.filter((x) => x !== cid);
     // 4. Buzzer
     G.flipTarget = null;
     for (const bz of byRole('BUZZER')) { const a = acts[bz.id]; if (a && a.kind === 'FLIP') { G.flipTarget = a.target; visits[bz.id] = a.target; } }
     // 5. KPK
-    const kpkCases = [];
-    for (const k of byRole('KPK')) { const a = acts[k.id]; if (a && (a.kind === 'INVESTIGATE' || a.kind === 'OTT')) visits[k.id] = a.target; if (a && a.kind === 'OTT') kpkCases.push(a.target); }
+    const kpkOps = [];
+    for (const k of byRole('KPK')) { const a = acts[k.id]; if (a && (a.kind === 'INVESTIGATE' || a.kind === 'OTT')) visits[k.id] = a.target; if (a && a.kind === 'OTT') kpkOps.push({ kpk: k.id, target: a.target }); }
     // 6. Pengamat
     for (const pg of byRole('PENGAMAT')) { const a = acts[pg.id]; if (a && a.kind === 'OBSERVE') visits[pg.id] = a.target; }
     for (const pg of byRole('PENGAMAT')) {
@@ -322,25 +336,47 @@
       (G.observations[pg.id] = G.observations[pg.id] || []).push({ id: a.target, visited: v == null ? null : v, night: G.day });
       note(G, pg.id, `📊 Pengamatan: ${t.name} ${v != null ? 'semalam mendatangi ' + P(G, v).name : 'tidak ke mana-mana semalam'}.`, 'reform');
     }
-    // berita
-    if (tgt == null) G.news = { kind: 'QUIET', head: 'Malam sepi, tikus sedang cuti bersama', low: 'Tidak ada kasus baru semalam.' };
-    else if (protectedSet.has(tgt)) G.news = { kind: 'BLOCKED', head: `HOAKS! Kasus ${card(cid).title} terbantahkan cek fakta`, low: `${P(G, tgt).name} lolos dari fitnah. Tim cek fakta bergerak semalam.` };
-    else {
-      const t = P(G, tgt); G.scandal++; t.suspect = true; stat(G, tgt, 'fitnah');
-      G.cases.push({ id: 'F', kind: 'FITNAH', suspect: tgt, card: cid, no: `KF/${pad2(G.day)}/${G.code}`, vetoed: false });
-      G.news = { kind: 'SUCCESS', head: card(cid).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA` };
+    // berita: semua berkas (fitnah maupun OTT) tampil dengan bentuk yang sama; urutannya diacak
+    const items = [], log = []; let shield = null;
+    const darkTeam = () => G.players.filter((p) => isDark(p));
+    if (tgt != null) {
+      const t = P(G, tgt), blocked = protectedSet.has(tgt);
+      if (!good) G.lastBadDay = G.day;
+      if (good) {
+        if (blocked) {
+          byRole('JURNALIS').forEach((j) => { const a = acts[j.id]; if (a && a.kind === 'FACTCHECK' && a.target === tgt) note(G, j.id, `🎙️ Cek fakta Anda ke ${t.name} membongkar kampanye PENCITRAAN dari Koruptor untuk dia. Kampanye dibatalkan.`, 'reform'); });
+          darkTeam().forEach((p) => note(G, p.id, `🔎 Pencitraan untuk ${t.name} dibongkar cek fakta Jurnalis.`, 'korup'));
+          log.push(`pencitraan ${t.name} dibongkar Jurnalis`);
+        } else { shield = tgt; log.push(`pencitraan untuk ${t.name}`); }
+      } else if (blocked) {
+        items.push({ head: `HOAKS! Kasus ${card(cid).title} terbantahkan cek fakta`, low: `${t.name} lolos dari fitnah. Tim cek fakta bergerak semalam.`, hoax: true });
+        log.push('fitnah digagalkan cek fakta');
+      } else {
+        G.scandal++; stat(G, tgt, 'fitnah');
+        const c = mkCase(G, 'FITNAH', tgt, cid);
+        items.push({ head: card(cid).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA`, no: c.no });
+        log.push(`${t.name} difitnah (${card(cid).title})`);
+      }
     }
-    for (const sid of kpkCases) {
-      const t = P(G, sid); if (!t || t.jailed) continue;
-      if (!isDark(t)) { G.news.kpk = `OTT KPK salah sasaran: ${persona(t.persona).e} ${t.name} dinyatakan BERSIH.`; G.history.push(`Malam ${G.day}: OTT gagal, ${t.name} bersih`); continue; }
-      if (G.cases.some((c) => c.suspect === sid)) continue;
-      t.suspect = true; G.cases.push({ id: 'K' + sid, kind: 'KPK', suspect: sid, card: null, no: `OTT/${pad2(G.day)}/${G.code}`, vetoed: false });
-      G.news.kpk = `OTT KPK! ${persona(t.persona).e} ${t.name} tertangkap tangan dan ditetapkan TERSANGKA.`;
-      G.history.push(`Malam ${G.day}: OTT KPK, ${t.name} tersangka`);
+    for (const op of kpkOps) {
+      const t = P(G, op.target); if (!t || t.jailed) continue;
+      if (shield === t.id) {
+        note(G, op.kpk, `🚨 OTT ke ${t.name} GAGAL: ia dilindungi kampanye pencitraan Koruptor.`, 'reform');
+        darkTeam().forEach((p) => note(G, p.id, `🛡️ Pencitraan untuk ${t.name} menggagalkan OTT KPK semalam!`, 'korup'));
+        log.push(`OTT atas ${t.name} gagal (pencitraan)`); continue;
+      }
+      if (G.cases.some((c) => c.suspect === t.id)) { note(G, op.kpk, `🚨 OTT ke ${t.name}: berkas atas dirinya sudah terbit semalam (digabung).`, 'reform'); continue; }
+      const c = mkCase(G, 'KPK', t.id, rnd(CARDS.filter((x) => x.id !== cid)).id);
+      items.push({ head: card(c.card).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA`, no: c.no });
+      note(G, op.kpk, `🚨 OTT ke ${t.name} berhasil: berkas ${c.no} terbit.`, 'reform');
+      log.push(`OTT KPK atas ${t.name}`);
     }
+    const mix = shuffle(items);
+    if (!mix.length) G.news = { kind: 'QUIET', head: 'Malam sepi, tikus sedang cuti bersama', low: 'Tidak ada kasus baru semalam.', more: [] };
+    else G.news = { kind: mix.some((x) => !x.hoax) ? 'SUCCESS' : 'BLOCKED', head: mix[0].head, low: mix[0].low, more: mix.slice(1).map((x) => ({ head: x.head, low: x.low })) };
     if (G.pendingColumn) { G.news.column = G.pendingColumn; G.pendingColumn = null; }
     G.news.id = ++G.seq;
-    G.history.push(`Malam ${G.day}: ${G.news.kind === 'SUCCESS' ? `${P(G, tgt).name} difitnah (${card(cid).title})` : G.news.kind === 'BLOCKED' ? 'fitnah digagalkan cek fakta' : 'sepi'}`);
+    G.history.push(`Malam ${G.day}: ${log.length ? log.join('; ') : 'sepi'}`);
     if (checkWin(G, now)) return;
     setPhase(G, 'MORNING', FIXED_T.morning, now);
   }
@@ -354,7 +390,7 @@
   function impeachNumbers(G) {
     const pool = free(G).filter((p) => p.id !== G.presidentId);
     let eff = 0; Object.keys(G.sigs).forEach((id) => { const p = P(G, id); if (!p || p.jailed || p.id === G.presidentId) return; eff += id === G.flipTarget ? -1 : 1; });
-    eff = Math.max(0, eff); const needed = Math.max(1, Math.ceil(pool.length / 2));
+    eff = Math.max(0, eff); const needed = Math.max(1, Math.ceil(pool.length * R(G, 'impeachFrac')));
     return { eff, needed, pct: pool.length ? Math.min(100, Math.round((eff / pool.length) * 100)) : 0 };
   }
   function checkImpeach(G, now) {
@@ -383,11 +419,19 @@
     const c = openCases(G).find((x) => x.id === caseId) || (caseId == null ? openCases(G)[0] : null);
     if (!c || !G.vetoAvailable || G.decided) return { err: 'Veto tidak bisa dipakai sekarang.' };
     c.vetoed = true; G.vetoAvailable = false; const s = P(G, c.suspect); if (s) s.suspect = false;
-    const fit = c.kind === 'FITNAH'; if (fit) G.scandal = Math.max(0, G.scandal - 1);
-    sys(G, `✨ Presiden ${pres(G).name} menggunakan HAK VETO. Kasus ${c.no} dibatalkan${fit ? ', Skandal −1' : ''}.`);
+    if (c.src === 'FITNAH') G.scandal = Math.max(0, G.scandal - 1);
+    sys(G, `✨ Presiden ${pres(G).name} menggunakan HAK VETO. Kasus ${c.no} dibatalkan.`);
     G.history.push(`Hari ${G.day}: Veto atas ${c.no}`);
-    fx(G, 'veto', '✨ VETO!', `Kasus ${c.no} dibatalkan.${fit ? ' Skandal −1.' : ''}`, 1800, now);
+    fx(G, 'veto', '✨ VETO!', `Kasus ${c.no} dibatalkan.`, 1800, now);
     return { ok: true };
+  }
+  // Bebaskan napi: semua jabatan lama dicabut, jadi Warga Sipil biasa (Reformis)
+  function freePrisoner(G, s) {
+    const wasDark = isDark(s);
+    s.jailed = false; s.role = 'WARGA'; s.recruited = false; s.headlineRight = false; s.exNapi = true;
+    note(G, s.id, '🔓 Anda bebas, tapi semua jabatan lama dicabut. Anda kini WARGA SIPIL biasa (Reformis). Cek kartu role Anda.', 'reform');
+    if (wasDark) G.players.filter((p) => isDark(p)).forEach((p) => note(G, p.id, `🚪 ${s.name} keluar dari sindikat setelah bebas. Ia kini Warga Sipil biasa.`, 'korup'));
+    return `${s.name} keluar dari Rutan Negara sebagai Warga Sipil biasa.`;
   }
   function applyDecision(G, kind, pid, now) {
     if (G.phase !== 'DECISION' || G.decided) return { err: 'Keputusan sudah diambil.' };
@@ -397,18 +441,14 @@
       const c = openCases(G).find((x) => x.suspect === pid) || (pid == null ? openCases(G)[0] : null);
       if (!c) return { err: 'Tidak ada tersangka untuk dijebloskan.' };
       const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects(); if (s.role === 'KPK') G.kpkEverJailed = true;
-      title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${c.kind === 'KPK' ? 'penetapan KPK' : card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
+      title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
       if (s.role === 'JURNALIS') {
         if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
         else { s.headlineRight = true; note(G, s.id, '📰 Anda mendapat Hak Headline. Tulis dari sel Anda di Rutan Negara.', 'istana'); }
       }
     } else if (kind === 'FREE') {
       const s = P(G, pid); if (!s || !s.jailed) return { err: 'Pilih napi yang valid.' };
-      const wasDark = isDark(s);
-      s.jailed = false; s.role = 'WARGA'; s.recruited = false; s.headlineRight = false; s.exNapi = true;
-      title = 'DIBEBASKAN'; sub = `${s.name} keluar dari Rutan Negara sebagai Warga Sipil biasa.`; clearSuspects();
-      note(G, s.id, '🔓 Anda bebas, tapi semua jabatan lama dicabut. Anda kini WARGA SIPIL biasa (Reformis). Cek kartu role Anda.', 'reform');
-      if (wasDark) G.players.filter((p) => isDark(p)).forEach((p) => note(G, p.id, `🚪 ${s.name} keluar dari sindikat setelah bebas. Ia kini Warga Sipil biasa.`, 'korup'));
+      title = 'DIBEBASKAN'; sub = freePrisoner(G, s); clearSuspects();
       G.history.push(`Hari ${G.day}: ${s.name} dibebaskan`);
     } else { title = 'STATUS QUO'; sub = 'Presiden memilih diam. Tuduhan dikesampingkan.'; clearSuspects(); }
     G.decided = true; G.endsAt = 0;
@@ -429,7 +469,7 @@
     let w = null, r = '';
     if (G.players.filter(isDark).every((p) => p.jailed)) { w = 'REFORMIS'; r = 'Seluruh sindikat mendekam di Rutan Negara. Untuk sementara.'; }
     else if (G.players.filter((p) => !isDark(p)).every((p) => p.jailed)) { w = 'GELAP'; r = 'Semua Reformis sudah dipenjara. Yang tersisa di luar hanya yang “bisa diatur”.'; }
-    else if (G.darkTerms >= 3) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
+    else if (G.darkTerms >= R(G, 'darkTerms')) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
     if (!w) return false;
     G.winner = w; G.reason = r; G.pending = null; setPhase(G, 'END', 0, now); return true;
   }
@@ -529,6 +569,13 @@
         sys(G, '🧑‍🏫 Seorang Ahli menyerahkan kajian ke meja Presiden.'); note(G, G.presidentId, '🧑‍🏫 Kajian Ahli baru masuk ke meja Anda.', 'istana'); note(G, me.id, '🧑‍🏫 Kajian Anda sudah di meja Presiden.', 'reform');
         return { ok: true };
       }
+      case 'grasi': {
+        if (!R(G, 'grasi')) return { err: 'Grasi tidak berlaku di ronde ini.' };
+        if (!['SIDANG', 'DECISION'].includes(ph) || me.id !== G.presidentId || G.decided || G.grasiUsed || G.pending) return { err: 'Grasi tidak bisa diberikan sekarang.' };
+        const s = P(G, a.prisoner); if (!s || !s.jailed) return { err: 'Pilih napi yang valid.' };
+        G.grasiUsed = true; const sub = freePrisoner(G, s); G.history.push(`Hari ${G.day}: ${s.name} diberi grasi`);
+        sys(G, `🕊️ GRASI Presiden ${me.name}: ${sub}`); fx(G, 'stamp', 'GRASI', sub, 2200, now); checkWin(G, now); return { ok: true };
+      }
       case 'veto': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return doVeto(G, a.case, now);
       case 'decide': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return applyDecision(G, a.kind === 'JAIL' || a.kind === 'FREE' ? a.kind : 'STATUS_QUO', a.kind === 'JAIL' ? a.suspect : a.prisoner, now);
     }
@@ -589,7 +636,10 @@
   }
   function botScandal(G, p) {
     const pool = free(G).filter((x) => !isDark(x) && x.id !== G.presidentId); if (!pool.length) return;
-    G.korChoice = { target: rnd(pool).id, card: rnd(G.hand.length ? G.hand : CARDS.map((c) => c.id)), by: p.id };
+    const all = free(G).filter((x) => x.id !== G.presidentId);
+    const cool = R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1;
+    if (all.length && (cool || Math.random() < 0.2)) { G.korChoice = { target: rnd(all.filter(isDark).length ? all.filter(isDark) : all).id, card: null, by: p.id, good: true }; return; }
+    G.korChoice = { target: rnd(pool).id, card: rnd(G.hand.length ? G.hand : CARDS.map((c) => c.id)), by: p.id, good: false };
   }
   function botAct(G, p, now) {
     const ph = G.phase, r = (a, b) => a + Math.random() * (b - a);
@@ -657,18 +707,16 @@
     const rep = G.expertReport || {}, prisoners = G.players.filter((x) => x.jailed);
     let oc = openCases(G);
     if (oc.length && G.vetoAvailable && !isDark(p)) {
-      const fit = oc.find((c) => c.kind === 'FITNAH');
-      if (fit && (rep[fit.suspect] === 'REFORMIS' || Math.random() < 0.15)) { doVeto(G, fit.id, now); oc = openCases(G); }
+      const c = oc.find((x) => rep[x.suspect] === 'REFORMIS') || (Math.random() < 0.15 ? rnd(oc) : null);
+      if (c) { doVeto(G, c.id, now); oc = openCases(G); }
     }
     let kind = 'STATUS_QUO', pid = null;
     if (oc.length) {
-      const kpk = oc.find((c) => c.kind === 'KPK'), fit = oc.find((c) => c.kind === 'FITNAH');
       if (isDark(p)) { const t = oc.find((c) => !isDark(P(G, c.suspect))); if (t && Math.random() < 0.85) { kind = 'JAIL'; pid = t.suspect; } }
       else {
         const proven = oc.find((c) => rep[c.suspect] === 'GELAP');
         if (proven) { kind = 'JAIL'; pid = proven.suspect; }
-        else if (kpk && Math.random() < 0.8) { kind = 'JAIL'; pid = kpk.suspect; }
-        else if (fit && rep[fit.suspect] !== 'REFORMIS' && Math.random() < 0.5) { kind = 'JAIL'; pid = fit.suspect; }
+        else { const cand = oc.filter((c) => rep[c.suspect] !== 'REFORMIS'); if (cand.length && Math.random() < 0.6) { kind = 'JAIL'; pid = rnd(cand).suspect; } }
       }
     }
     if (kind === 'STATUS_QUO' && prisoners.length && Math.random() < 0.3) {
@@ -688,7 +736,7 @@
       day: G.day, creatorId: G.creatorId, settings: G.settings, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
       players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
       scandal: G.scandal, presidentId: G.presidentId, term: G.term, vetoAvailable: G.vetoAvailable, plt: !!G.plt,
-      cases: G.cases.map((c) => ({ id: c.id, kind: c.kind, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
+      cases: G.cases.map((c) => ({ id: c.id, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
       election: e ? { cands: e.cands, visi: e.visi, reason: e.reason, done: e.done, votesIn: Object.keys(e.votes).length, voters: electionVoters(G).length } : null,
       impeach: impeachNumbers(G), skip: { n: Object.keys(G.skip).length, need: Math.ceil(free(G).filter(active).length * 0.6) },
       nightIn: G.phase === 'NIGHT' ? Object.keys(G.nightActs).length : 0, nightTotal: G.phase === 'NIGHT' ? free(G).length : 0,
@@ -715,7 +763,8 @@
     if (r === 'JURNALIS') v.lastProtected = G.lastProtected[pid] == null ? null : G.lastProtected[pid];
     if (r === 'BROKER') v.recruitAvailable = !G.recruitUsed;
     if (r === 'GURU_BESAR') v.expertUsed = G.expertUsed;
-    if (pid === G.presidentId) v.president = { vetoAvailable: G.vetoAvailable, appeals: G.appeals, expertReport: G.expertReport };
+    if (r === 'KORUPTOR' || (dark && scandalActors(G).some((p) => p.id === pid))) v.korCooldown = !!(R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1);
+    if (pid === G.presidentId) v.president = { grasiAvailable: !!(R(G, 'grasi') && !G.grasiUsed), vetoAvailable: G.vetoAvailable, appeals: G.appeals, expertReport: G.expertReport };
     return v;
   }
 
