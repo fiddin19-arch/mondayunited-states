@@ -178,7 +178,13 @@ tailwind.config = {
   const persona = (id) => PERSONAS.find((x) => x.id === id) || PERSONAS[0];
   const pad2 = (n) => String(n).padStart(2, '0');
   const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-  const active = (p) => p.bot || p.connected; // pemain yang ditunggu
+  const ai = (p) => !!(p.bot || p.auto);           // dikendalikan mesin (bot atau autopilot AFK)
+  const active = (p) => ai(p) || p.connected;      // pemain yang ditunggu
+  const LOBBY_CD = 60000, LOBBY_EXT_MAX = 5, BOT_OFFER_MS = 180000, GHOST_MS = 90000, HOST_GRACE_MS = 15000, AFK_MS = 120000;
+  // Filter kata kasar sederhana (huruf boleh diulang: "anjiiing")
+  const BAD = ['anjing', 'anjeng', 'anjir', 'bangsat', 'bajingan', 'babi', 'kontol', 'memek', 'ngentot', 'entot', 'jancok', 'jancuk', 'cok', 'asu', 'goblok', 'goblog', 'tolol', 'kampret', 'keparat', 'pepek', 'peler', 'titit', 'puki', 'lonte', 'pelacur', 'perek', 'tai', 'taik', 'bego', 'idiot', 'fuck', 'shit', 'bitch'];
+  const BAD_RE = new RegExp('(^|[^a-z])(' + BAD.map((w) => w.split('').map((c) => c + '+').join('')).join('|') + ')(?=$|[^a-z])', 'gi');
+  const filt = (t) => String(t).replace(BAD_RE, (m, pre, w) => pre + w[0] + '*'.repeat(Math.max(2, w.length - 1)));
 
   const openCases = (G) => G.cases.filter((c) => !c.vetoed && !c.closed && P(G, c.suspect) && !P(G, c.suspect).jailed);
   const caseSuspects = (G) => openCases(G).map((c) => c.suspect);
@@ -194,11 +200,12 @@ tailwind.config = {
   function later(G, step, ms, now, arg) { G.pending = { at: now + ms, step, arg: arg == null ? null : arg }; }
 
   // ---------------------------------------------------------------- CREATE
-  function create(code, creatorId, now) {
-    now = now || Date.now();
+  function create(code, creatorId, now, opts) {
+    now = now || Date.now(); opts = opts || {};
     return {
       v: 3, code: String(code), creatorId, phase: 'LOBBY', phaseStart: now, phaseDur: 0, endsAt: 0, pending: null, rev: 1, seq: 0,
-      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {} },
+      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {}, public: !!opts.public },
+      lobby: { cdAt: 0, ext: 0, openedAt: now }, banned: {},
       players: [], day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true,
       cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null,
       nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null,
@@ -211,10 +218,11 @@ tailwind.config = {
   function join(G, pid, info, now) {
     now = now || Date.now();
     const ex = P(G, pid);
-    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, clean(info.name, 14) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, filt(clean(info.name, 14)) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (G.banned && G.banned[pid]) return { err: 'Anda sudah dikeluarkan dari room ini oleh pemegang palu.' };
     if (G.phase !== 'LOBBY') return { err: 'Sidang sudah berjalan. Tunggu ronde berikutnya.' };
     if (G.players.length >= MAX_PLAYERS) return { err: 'Ruang sidang penuh (12 kursi).' };
-    const p = blankPlayer(pid, uniqueName(G, clean(info && info.name, 14) || 'Warga', pid), null, false);
+    const p = blankPlayer(pid, uniqueName(G, filt(clean(info && info.name, 14)) || 'Warga', pid), null, false);
     G.players.push(p); setPersona(G, p, info && info.persona);
     if (!G.creatorId || !P(G, G.creatorId)) G.creatorId = pid;
     sys(G, `📝 ${p.name} hadir di ruang sidang.`);
@@ -249,6 +257,7 @@ tailwind.config = {
     const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
     shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
     Object.assign(G, { sadapNight: {}, lastBadDay: -9, grasiUsed: false, day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    G.lobby = Object.assign(G.lobby || {}, { cdAt: 0 });
     G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
     setPhase(G, 'REVEAL', FIXED_T.reveal, now);
     return { ok: true };
@@ -400,7 +409,7 @@ tailwind.config = {
     // 3. Koruptor: berita JELEK (fitnah) atau berita BAGUS (pencitraan)
     let tgt = null, cid = null, good = false;
     const kor = scandalActors(G);
-    if (!G.korChoice && kor.length && kor.every((k) => k.bot)) botScandal(G, rnd(kor));
+    if (!G.korChoice && kor.length && kor.every(ai)) botScandal(G, rnd(kor));
     if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; good = !!G.korChoice.good; visits[G.korChoice.by] = tgt; } }
     if (cid) G.deck = G.deck.filter((x) => x !== cid);
     // 4. Buzzer
@@ -524,7 +533,7 @@ tailwind.config = {
       const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects(); if (s.role === 'KPK') G.kpkEverJailed = true;
       title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
       if (s.role === 'JURNALIS') {
-        if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
+        if (ai(s)) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
         else { s.headlineRight = true; note(G, s.id, '📰 Anda mendapat Hak Headline. Tulis dari sel Anda di Rutan Negara.', 'istana'); }
       }
     } else if (kind === 'FREE') {
@@ -569,7 +578,7 @@ tailwind.config = {
     switch (a.t) {
       // lobby
       case 'persona': if (ph !== 'LOBBY') return; setPersona(G, me, a.persona); return { ok: true };
-      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, clean(a.name, 14) || me.name, me.id); return { ok: true };
+      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, filt(clean(a.name, 14)) || me.name, me.id); return { ok: true };
       case 'settings': {
         if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room.' };
         const s = a.settings || {}; if (typeof s.auto === 'boolean') G.settings.auto = s.auto;
@@ -582,20 +591,37 @@ tailwind.config = {
       case 'kick': {
         if (ph !== 'LOBBY' || !isCreator || a.id === me.id) return { err: 'Tidak bisa.' };
         const i = G.players.findIndex((p) => p.id === a.id); if (i < 0) return { err: 'Tidak ada.' };
-        const [p] = G.players.splice(i, 1); if (!p.bot) sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); return { ok: true };
+        const [p] = G.players.splice(i, 1); if (!p.bot) { G.banned = G.banned || {}; G.banned[p.id] = true; sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); } return { ok: true };
       }
       case 'leave': {
-        if (ph !== 'LOBBY') { me.connected = false; return { ok: true }; }
+        if (ph !== 'LOBBY') { me.connected = false; me.offAt = now; if (ph !== 'END') setAuto(G, me, true, now); else ensureHost(G, now, true); return { ok: true }; }
         G.players = G.players.filter((p) => p.id !== me.id); sys(G, `🚪 ${me.name} meninggalkan ruang sidang.`);
-        if (isCreator) { const h = G.players.find((p) => !p.bot); G.creatorId = h ? h.id : null; if (h) sys(G, `🔁 ${h.name} kini memegang palu sidang.`); }
+        if (isCreator) ensureHost(G, now, true);
         return { ok: true };
       }
-      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room yang bisa memulai.' }; return startGame(G, now);
+      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu yang bisa memulai.' }; return startGame(G, now);
+      case 'extend': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        if (!G.lobby.cdAt) return { err: 'Hitung mundur belum berjalan.' };
+        if (G.lobby.ext >= LOBBY_EXT_MAX) return { err: `Sudah ditambah ${LOBBY_EXT_MAX}x. Mulai saja, yuk.` };
+        G.lobby.ext++; G.lobby.cdAt += LOBBY_CD; sys(G, `⏳ ${me.name} menambah waktu tunggu 60 detik.`); return { ok: true };
+      }
+      case 'fillBots': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        let k = 0; while (G.players.length < MIN_PLAYERS) { if (addBot(G).err) break; k++; }
+        if (k) sys(G, `🤖 ${k} bot ikut mengisi kursi kosong.`); return { ok: true };
+      }
+      case 'visibility': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        G.settings.public = !!a.public; if (!G.settings.public) G.lobby.cdAt = 0;
+        sys(G, G.settings.public ? '🌐 Room dibuka untuk umum.' : '🔒 Room dijadikan privat (hanya lewat kode).'); return { ok: true };
+      }
       case 'replay': {
         if (ph !== 'END' || !isCreator) return { err: 'Hanya pembuat room.' };
         G.players = G.players.filter((p) => p.bot || p.connected);
-        G.players.forEach((p) => Object.assign(p, { role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
+        G.players.forEach((p) => Object.assign(p, { auto: false, role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
         Object.assign(G, { winner: null, reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
+        G.lobby = { cdAt: 0, ext: 0, openedAt: now };
         G.chat = []; sys(G, '🔁 Ruang sidang dibuka lagi. Ronde baru!'); setPhase(G, 'LOBBY', 0, now); return { ok: true };
       }
       // reveal
@@ -618,13 +644,13 @@ tailwind.config = {
       case 'chat': case 'react': {
         if (!['LOBBY', 'ELECTION', 'SIDANG', 'DECISION', 'END'].includes(ph)) return { err: 'Chat dibuka saat siang.' };
         if (me.jailed) return { err: 'Napi hanya bisa mengirim surat.' };
-        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : clean(a.text, 200);
+        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : filt(clean(a.text, 200));
         if (!text) return; if (now - me.lastChatAt < 1200) return { err: 'Pelan-pelan, 1 pesan per 1,2 detik.' };
         me.lastChatAt = now; say(G, me.id, text); return { ok: true };
       }
       case 'letter': {
         if (!['SIDANG', 'DECISION'].includes(ph) || !me.jailed || me.letterDay === G.day) return { err: 'Surat hari ini sudah terkirim.' };
-        const text = clean(a.text, 200); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
+        const text = filt(clean(a.text, 200)); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
       }
       case 'sign': {
         if (!['SIDANG', 'DECISION'].includes(ph) || me.jailed || me.id === G.presidentId || G.decided || G.carryover || G.presidentId == null || G.pending) return { err: 'Petisi tidak bisa ditandatangani sekarang.' };
@@ -640,7 +666,7 @@ tailwind.config = {
       }
       case 'headline': {
         if (!me.jailed || !me.headlineRight) return { err: 'Tidak punya Hak Headline.' };
-        const text = clean(a.text, 90); if (!text) return { err: 'Headline kosong.' };
+        const text = filt(clean(a.text, 90)); if (!text) return { err: 'Headline kosong.' };
         me.headlineRight = false; G.pendingColumn = { by: me.id, text }; note(G, me.id, '📰 Headline Anda masuk antrean redaksi untuk pagi berikutnya.', 'istana'); return { ok: true };
       }
       case 'testify': {
@@ -667,6 +693,7 @@ tailwind.config = {
   function tick(G, now) {
     now = now || Date.now();
     const before = G.rev;
+    housekeeping(G, now);
     if (G.pending && now >= G.pending.at) {
       const { step, arg } = G.pending; G.pending = null;
       if (step === 'startElection') startElection(G, arg || 'awal', now);
@@ -695,7 +722,9 @@ tailwind.config = {
   }
   function setConnected(G, pid, on, now) {
     const p = P(G, pid); if (!p || p.bot || p.connected === on) return false;
-    p.connected = on; bump(G, now || Date.now());
+    now = now || Date.now();
+    p.connected = on; if (!on) p.offAt = now; bump(G, now);
+    if (on && p.auto) setAuto(G, p, false, now);
     // Pemain yang putus tidak boleh menahan fase
     if (!on) {
       if (G.phase === 'NIGHT') maybeEndNight(G, now);
@@ -705,11 +734,49 @@ tailwind.config = {
     return true;
   }
 
+  // ---------------------------------------------- ROOM ONLINE: host, lobi, AFK
+  function setAuto(G, p, on, now) {
+    if (!p || p.bot || !!p.auto === on) return;
+    p.auto = on;
+    if (on) { sys(G, `🤖 ${p.name} AFK — autopilot mengambil alih sampai ia kembali.`); if (!['LOBBY', 'END'].includes(G.phase)) G.botAt[p.id] = now + 1200; }
+    else { sys(G, `👋 ${p.name} kembali ke sidang.`); delete G.botAt[p.id]; }
+    bump(G, now);
+  }
+  // Palu sidang pindah ke manusia yang paling lama hadir dan masih tersambung.
+  function ensureHost(G, now, force) {
+    const h = P(G, G.creatorId);
+    const ok = h && !h.bot && (h.connected || (!force && now - (h.offAt || now) < HOST_GRACE_MS));
+    if (ok) return false;
+    const next = G.players.find((p) => !p.bot && p.connected && p.id !== G.creatorId);
+    if (!next) { if (!h) G.creatorId = null; return false; }
+    G.creatorId = next.id; sys(G, `🔁 ${next.name} kini memegang palu sidang.`); bump(G, now); return true;
+  }
+  function housekeeping(G, now) {
+    if (!G.lobby) G.lobby = { cdAt: 0, ext: 0, openedAt: now };
+    if (G.phase === 'LOBBY' || G.phase === 'END') ensureHost(G, now, false);
+    if (G.phase === 'LOBBY') {
+      // kursi hantu: pemain yang putus lama di lobi dikeluarkan supaya kursi bisa dipakai orang lain
+      const ghosts = G.players.filter((p) => !p.bot && !p.connected && now - (p.offAt || now) > GHOST_MS);
+      if (ghosts.length) {
+        G.players = G.players.filter((p) => !ghosts.includes(p));
+        ghosts.forEach((p) => sys(G, `🚪 ${p.name} terputus terlalu lama dan keluar dari ruang tunggu.`));
+        ensureHost(G, now, true); bump(G, now);
+      }
+      const L = G.lobby, valid = distCounts(G).valid && G.players.some((p) => !p.bot);
+      if (G.settings.public && valid && !L.cdAt) { L.cdAt = now + LOBBY_CD; L.ext = 0; sys(G, '⏱️ Kursi cukup! Sidang mulai otomatis dalam 60 detik.'); bump(G, now); }
+      else if (L.cdAt && (!valid || !G.settings.public)) { L.cdAt = 0; if (!valid) sys(G, '⏸️ Hitung mundur dibatalkan, pemain kurang.'); bump(G, now); }
+      if (L.cdAt && G.players.length >= MAX_PLAYERS && L.cdAt - now > 10000) { L.cdAt = now + 10000; sys(G, '🪑 Kursi penuh! Mulai dalam 10 detik.'); bump(G, now); }
+      if (L.cdAt && now >= L.cdAt) { L.cdAt = 0; if (startGame(G, now).ok) bump(G, now); }
+    } else if (G.phase !== 'END') {
+      for (const p of G.players) if (!p.bot && !p.auto && !p.connected && now - (p.offAt || now) > AFK_MS) setAuto(G, p, true, now);
+    }
+  }
+
   // ------------------------------------------------------------------ BOTS
-  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (p.bot) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
+  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (ai(p)) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
   function runBots(G, now) {
     for (const p of G.players) {
-      if (!p.bot) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
+      if (!ai(p)) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
       delete G.botAt[p.id];
       const next = botAct(G, p, now); if (next) G.botAt[p.id] = now + next;
       bump(G, now);
@@ -744,7 +811,7 @@ tailwind.config = {
       const o = others(); let a = { kind: 'DUMMY' };
       switch (p.role) {
         case 'KORUPTOR': {
-          const humans = scandalActors(G).filter((x) => !x.bot);
+          const humans = scandalActors(G).filter((x) => !ai(x));
           if (G.korChoice) a = { kind: 'AGREE' };
           else if (!humans.length || now > G.endsAt - 6000) { botScandal(G, p); if (!G.korChoice) return 0; a = { kind: 'AGREE' }; }
           else return Math.max(1000, G.endsAt - 5000 - now);
@@ -764,7 +831,7 @@ tailwind.config = {
         case 'PENGAMAT': if (o.length) a = { kind: 'OBSERVE', target: rnd(o).id }; break;
       }
       // Plt. Koruptor bot
-      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every((x) => x.bot) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
+      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every(ai) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
       const res = nightAction(G, p, a, now); if (res.err) nightAction(G, p, { kind: p.role === 'BROKER' ? 'PASS' : p.role === 'KPK' ? 'INVESTIGATE' : 'DUMMY', target: o.length ? rnd(o).id : null }, now);
       return 0;
     }
@@ -814,8 +881,9 @@ tailwind.config = {
     const end = G.phase === 'END', e = G.election;
     return {
       code: G.code, rev: G.rev, now, phase: G.phase, endsAt: G.endsAt, phaseDur: G.phaseDur, phaseStart: G.phaseStart, locked: !!G.pending,
-      day: G.day, creatorId: G.creatorId, settings: G.settings, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
-      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
+      day: G.day, creatorId: G.creatorId, settings: G.settings,
+      lobby: G.phase === 'LOBBY' && G.lobby ? { cdAt: G.lobby.cdAt, ext: G.lobby.ext, extMax: LOBBY_EXT_MAX, botOffer: !!G.settings.public && G.players.length < MIN_PLAYERS && now - G.lobby.openedAt >= BOT_OFFER_MS } : null, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
+      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, afk: !!p.auto, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
       scandal: G.scandal, presidentId: G.presidentId, term: G.term, vetoAvailable: G.vetoAvailable, plt: !!G.plt,
       cases: G.cases.map((c) => ({ id: c.id, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
       election: e ? { cands: e.cands, visi: e.visi, reason: e.reason, done: e.done, votesIn: Object.keys(e.votes).length, voters: electionVoters(G).length } : null,
@@ -849,8 +917,14 @@ tailwind.config = {
     return v;
   }
 
+  // Ringkasan untuk daftar room publik (tanpa rahasia)
+  function summary(G, now) {
+    const h = P(G, G.creatorId);
+    return { code: G.code, pub: !!(G.settings && G.settings.public), phase: G.phase, n: G.players.length, humans: G.players.filter((p) => !p.bot).length,
+      host: h ? h.name : '', cdAt: G.lobby ? G.lobby.cdAt : 0, at: now || Date.now() };
+  }
   const Engine = {
-    MAX_DAYS,
+    MAX_DAYS, summary, filt,
     create, join, act, tick, setConnected, publicView, privateView, distCounts,
     DATA: { PERSONAS, ROLES, WIN_TEXT, DIST, DIST_KEYS, NINE_PLUS, CARDS, DARK_ROLES, MIN_PLAYERS, MAX_PLAYERS },
   };
@@ -892,17 +966,27 @@ window.makeLocalPlay = function () {
     label: 'Cloudflare', status: 'online', active: 'remote',
     init() { if (code) open(true); },
     async local(info) { NET.active = 'local'; return local.start(info); },
-    async connect({ action, code: c, name, persona }) {
+    async listRooms() {
+      try { const r = await fetch('/api/rooms', { cache: 'no-store' }); return (await r.json()).rooms || []; } catch (e) { return null; }
+    },
+    async connect({ action, code: c, name, persona, pub }) {
       NET.active = 'remote'; close();
-      if (action === 'create') {
-        try { const r = await fetch('/api/create', { method: 'POST' }); const j = await r.json(); if (j.err) return j; c = j.code; }
-        catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+      const skip = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (action === 'create' || action === 'quick') {
+          try {
+            const r = await fetch(action === 'quick' ? '/api/quick' : '/api/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action === 'quick' ? { skip } : { public: pub !== false }) });
+            const j = await r.json(); if (j.err) return j; c = j.code;
+          } catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+        }
+        code = c; want = true; open(false);
+        const r = await request({ t: 'join', name, persona });
+        if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} return r; }
+        want = false; close(); code = null;
+        if (action !== 'quick') return r;
+        skip.push(c);   // room keburu penuh/mulai: cari yang lain
       }
-      code = c; want = true; open(false);
-      const r = await request({ t: 'join', name, persona });
-      if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} }
-      else { want = false; close(); code = null; }
-      return r;
+      return { err: 'Belum dapat room. Coba lagi sebentar.' };
     },
     send(a) { if (NET.active === 'local') return local.send(a); return request({ t: 'act', a }); },
     leave() {
@@ -966,6 +1050,7 @@ window.makeLocalPlay = function () {
     flipped: false, sel: { target: null, card: null, good: false, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: '' },
     modal: null, toast: null, toastT: 0, seenFx: 0, fxShow: null, seenNotes: +(LS.get('mdu_seen_notes') || 0), mobileTab: 'chat', presDrawer: true, prisonerPick: null,
     busy: false, err: '', wall: 0, lastNewsId: 0, newsSkipped: 0, bannerIdx: 0,
+    pub: LS.get('mdu_pub') !== '0', rooms: null, roomsAt: 0, muted: new Set(),
   };
   const now = () => Date.now() + offset;
   const P = (id) => (V ? V.players.find((p) => p.id === id) : null);
@@ -1019,7 +1104,7 @@ window.makeLocalPlay = function () {
   const sectionTitle = (t) => `<h3 class="text-[11px] font-semibold uppercase tracking-[.2em] text-zinc-400">${t}</h3>`;
   const ticker = (cls) => `<div class="overflow-hidden whitespace-nowrap bg-berita text-ink font-semibold text-sm py-1.5 ${cls || ''}"><span class="ticker">${TICKER.repeat(2)}</span></div>`;
   const nm = (p) => esc(p ? p.name : '?');
-  const tag = (p) => (p && p.bot ? ' <span class="text-[10px] text-zinc-500">🤖</span>' : '') + (p && !p.bot && !p.connected ? ' <span class="text-[10px] text-zinc-500" title="terputus">📴</span>' : '');
+  const tag = (p) => (p && p.bot ? ' <span class="text-[10px] text-zinc-500">🤖</span>' : '') + (p && p.afk ? ' <span class="text-[10px] font-bold rounded px-1 bg-white/10 text-zinc-300" title="autopilot sementara">AFK</span>' : p && !p.bot && !p.connected ? ' <span class="text-[10px] text-zinc-500" title="terputus">📴</span>' : '') + (p && U.muted.has(p.id) ? ' <span class="text-[10px]" title="dibisukan">🔇</span>' : '');
   function avatar(p, size, extra) {
     const isP = V && p.id === V.presidentId;
     return `<div class="relative ${size || 'size-12'} shrink-0 rounded-2xl grid place-items-center text-2xl bg-ink-700 ring-2 ${isP ? 'ring-istana shadow-neon-istana' : 'ring-white/10'} ${p.jailed ? 'grayscale opacity-50' : ''} ${extra || ''}">${persona(p.persona).e}${isP ? '<span class="absolute -top-2 -right-2 text-sm">👑</span>' : ''}${p.jailed ? '<span class="absolute -bottom-1 -right-1 text-xs bg-ink rounded px-0.5">⛓</span>' : ''}</div>`;
@@ -1036,23 +1121,26 @@ window.makeLocalPlay = function () {
 
   // ------------------------------------------------------- LANDING
   function scrLanding() {
-    const hasLocal = !!window.NET.local;
+    const hasLocal = !!window.NET.local, online = !!window.NET.listRooms;
     return `<div class="min-h-screen flex flex-col">${ticker()}
-    <main class="flex-1 grid place-items-center px-6 py-12 relative overflow-hidden">
+    <main class="flex-1 grid grid-cols-[minmax(0,1fr)] place-items-center px-6 py-12 relative overflow-hidden">
       <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ff2e4d1f,transparent_55%),radial-gradient(ellipse_at_bottom_right,#f5c54214,transparent_50%)]"></div>
       <div class="relative w-full max-w-md text-center rise">
         <p class="font-mono text-xs tracking-[.3em] text-zinc-500 mb-4">SIDANG NO. 01/2026 • RAHASIA NEGARA</p>
-        <h1 class="font-display uppercase leading-[.85] text-6xl sm:text-7xl text-white">Mondayunited<br><span class="text-korup glitch inline-block">States</span></h1>
+        <h1 class="font-display uppercase leading-[.85] text-[clamp(2.2rem,10.5vw,4.5rem)] text-white">Mondayunited<br><span class="text-korup glitch inline-block">States</span></h1>
         <p class="mt-4 text-zinc-400">Sidang dimulai. Siapa yang masuk angin?</p>
         <div class="mt-10 space-y-4">
-          <button data-a="goCreate" class="${btn('istana')} w-full h-14 text-lg">🏛️ Buat Room Baru</button>
+          ${online ? `<button data-a="goQuick" class="${btn('istana')} w-full h-14 text-lg pulse-gold">⚡ Main Cepat</button>
+          <p class="-mt-2 text-xs text-zinc-500">Langsung masuk ke room publik yang sedang menunggu pemain.</p>
+          <div class="grid grid-cols-2 gap-2"><button data-a="goRooms" class="${btn('ghost')} w-full">🔎 Cari Room</button><button data-a="goCreate" class="${btn('ghost')} w-full">🏛️ Buat Room</button></div>`
+          : `<button data-a="goCreate" class="${btn('istana')} w-full h-14 text-lg">🏛️ Buat Room Baru</button>`}
           <div class="flex items-center gap-3 text-xs text-zinc-500 uppercase tracking-widest"><span class="h-px flex-1 bg-white/10"></span>atau gabung<span class="h-px flex-1 bg-white/10"></span></div>
           <div class="flex items-center justify-center gap-2">
-            ${U.joinCode.map((d, i) => `<input data-otp="${i}" inputmode="numeric" maxlength="1" value="${d}" aria-label="Digit ${i + 1} kode room" class="size-14 sm:size-16 rounded-xl bg-ink-800 ring-1 ring-white/15 text-center font-mono text-3xl text-istana focus:ring-2 focus:ring-istana outline-none">`).join('')}
-            <button data-a="goJoin" class="${btn('ghost')} h-14 sm:h-16 px-4">Masuk →</button>
+            ${U.joinCode.map((d, i) => `<input data-otp="${i}" inputmode="numeric" maxlength="1" value="${d}" aria-label="Digit ${i + 1} kode room" class="size-12 sm:size-16 rounded-xl bg-ink-800 ring-1 ring-white/15 text-center font-mono text-2xl sm:text-3xl text-istana focus:ring-2 focus:ring-istana outline-none">`).join('')}
+            <button data-a="goJoin" class="${btn('ghost')} h-12 sm:h-16 px-3 sm:px-4">Masuk →</button>
           </div>
           <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
-          ${hasLocal ? '<button data-a="goLocal" class="w-full text-sm text-zinc-400 hover:text-white underline underline-offset-4">🎮 Latihan solo melawan bot (offline)</button>' : ''}
+          ${hasLocal ? '<button data-a="goLocal" class="w-full h-12 rounded-xl text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-white/5">🎮 Latihan offline melawan bot</button>' : ''}
         </div>
         <p class="mt-8 text-xs text-zinc-600">6–12 pemain • ${esc(window.NET.label || '')}</p>
       </div>
@@ -1060,7 +1148,10 @@ window.makeLocalPlay = function () {
   }
   function scrIdentity() {
     const sel = U.persona ? persona(U.persona) : null;
-    const title = U.mode === 'join' ? `Gabung ke Room #${U.joinCode.join('')}` : U.mode === 'local' ? 'Latihan Solo' : 'Buat Room Baru';
+    const title = U.mode === 'join' ? `Gabung ke Room #${U.joinCode.join('')}` : U.mode === 'local' ? 'Latihan Offline' : U.mode === 'quick' ? 'Main Cepat' : 'Buat Room Baru';
+    const pubPick = U.mode === 'create' && window.NET.listRooms ? `<div class="mt-6"><p class="text-sm text-zinc-400">Jenis room</p><div class="mt-2 grid grid-cols-2 gap-2">
+        <button data-a="setPub" data-v="1" aria-pressed="${U.pub}" class="rounded-xl p-3 text-left ring-1 ${U.pub ? 'ring-2 ring-istana bg-istana-soft' : 'ring-white/10 bg-ink-800'}"><b>🌐 Publik</b><span class="block text-xs text-zinc-400 mt-0.5">Muncul di Cari Room. Mulai otomatis saat 6 orang.</span></button>
+        <button data-a="setPub" data-v="0" aria-pressed="${!U.pub}" class="rounded-xl p-3 text-left ring-1 ${!U.pub ? 'ring-2 ring-istana bg-istana-soft' : 'ring-white/10 bg-ink-800'}"><b>🔒 Privat</b><span class="block text-xs text-zinc-400 mt-0.5">Hanya lewat kode. Kamu yang menekan mulai.</span></button></div></div>` : '';
     return `<div class="min-h-screen flex flex-col">${ticker()}
     <main class="flex-1 px-5 py-10"><div class="w-full max-w-xl mx-auto rise">
       <p class="text-xs uppercase tracking-[.2em] text-zinc-400">Formulir Daftar Hadir • ${title}</p>
@@ -1073,10 +1164,36 @@ window.makeLocalPlay = function () {
         ${PERSONAS.map((p) => `<button role="radio" aria-checked="${U.persona === p.id}" data-a="persona" data-v="${p.id}" title="${p.n}" class="aspect-square rounded-2xl bg-ink-800 ring-1 ring-white/10 text-3xl hover:ring-white/30 transition aria-checked:ring-2 aria-checked:ring-istana aria-checked:bg-istana-soft">${p.e}</button>`).join('')}
       </div>
       <p class="mt-3 min-h-10 text-sm">${sel ? `<b class="text-istana">${sel.n}</b> <span class="text-zinc-400 italic">“${sel.t}”</span>` : '<span class="text-zinc-600">Belum memilih persona.</span>'}</p>
-      <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
+      ${pubPick}
+      <p class="text-xs text-korup min-h-4 mt-2">${esc(U.err)}</p>
       <button data-a="enter" class="${btn('primary')} w-full mt-2" ${U.persona && U.nick.trim() && !U.busy ? '' : 'disabled'}>${U.busy ? '⏳ Menghubungkan…' : '📝 Daftar Hadir'}</button>
       <button data-a="back" class="mt-3 w-full text-sm text-zinc-500 hover:text-zinc-300">← Kembali</button>
     </div></main></div>`;
+  }
+  function scrRooms() {
+    const list = U.rooms;
+    const row = (r) => `<button data-a="pickRoom" data-v="${esc(r.code)}" class="w-full flex items-center gap-3 rounded-2xl bg-ink-800 ring-1 ring-white/10 hover:ring-istana/60 p-4 text-left">
+        <div class="flex-1 min-w-0"><p class="font-semibold truncate">Sidang ${esc(r.host || 'Tanpa Nama')}</p><p class="text-xs text-zinc-400">#${esc(r.code)} • ${r.humans} orang${r.n > r.humans ? ` + ${r.n - r.humans} bot` : ''}${r.cdLeft ? ` • <span class="text-istana">mulai ±${r.cdLeft}s</span>` : ''}</p></div>
+        <div class="text-right"><p class="font-mono text-lg ${r.n >= 6 ? 'text-reform' : 'text-zinc-200'}">${r.n}/12</p><div class="mt-1 h-1.5 w-16 rounded-full bg-white/10 overflow-hidden"><div class="h-full ${r.n >= 6 ? 'bg-reform' : 'bg-istana'}" style="width:${(r.n / 12) * 100}%"></div></div></div></button>`;
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 px-5 py-8"><div class="w-full max-w-xl mx-auto rise">
+      <div class="flex items-end justify-between gap-3"><div><p class="text-xs uppercase tracking-[.2em] text-zinc-400">Daftar Sidang Terbuka</p><h2 class="font-display text-4xl uppercase mt-1">Cari Room</h2></div>
+        <button data-a="refreshRooms" class="${btn('ghost')} h-10 px-3 text-sm">↻ Muat ulang</button></div>
+      <div class="mt-5 space-y-2">${list === null ? '<p class="text-sm text-zinc-500">⏳ Memuat daftar…</p>' : list === false ? '<p class="text-sm text-korup">Gagal memuat daftar. Coba muat ulang.</p>'
+        : list.length ? list.map(row).join('') : `<div class="rounded-2xl border-2 border-dashed border-white/15 p-6 text-center"><p class="text-zinc-300">Belum ada room publik yang menunggu.</p><p class="text-sm text-zinc-500 mt-1">Jadilah yang pertama, nanti orang lain yang menekan Main Cepat akan masuk ke room-mu.</p><button data-a="goCreate" class="${btn('istana')} mt-4">🏛️ Buat Room Publik</button></div>`}</div>
+      <p class="mt-4 text-xs text-zinc-600">Daftar diperbarui otomatis setiap 5 detik. Room privat tidak tampil di sini.</p>
+      <button data-a="back" class="mt-6 w-full text-sm text-zinc-500 hover:text-zinc-300">← Kembali</button>
+    </div></main></div>`;
+  }
+  function lobbyBanner(creator, n) {
+    const L = V.lobby || {}, pub = V.settings.public;
+    if (L.cdAt) return `<div class="mt-4 rounded-2xl bg-istana-soft ring-1 ring-istana/40 p-4 flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[150px]"><p class="text-xs uppercase tracking-[.2em] text-istana">Mulai otomatis</p><p class="font-mono text-3xl text-white tabular-nums" data-cd>--:--</p><p class="text-xs text-zinc-400">Sidang tetap bisa diikuti sampai 12 orang.</p></div>
+        ${creator ? `<div class="flex gap-2"><button data-a="extend" class="${btn('ghost')} h-11 px-3 text-sm" ${L.ext >= L.extMax ? 'disabled' : ''}>⏳ +60 detik <span class="text-[10px] text-zinc-500">${L.extMax - L.ext}x</span></button><button data-a="start" class="${btn('istana')} h-11 px-4 text-sm">Mulai sekarang ▶</button></div>` : ''}</div>`;
+    if (L.botOffer) return `<div class="mt-4 rounded-2xl bg-ink-800 ring-1 ring-white/15 p-4"><p class="font-semibold">🦗 Sepi nih, sudah 3 menit menunggu.</p>
+        ${creator ? `<p class="text-sm text-zinc-400 mt-1">Isi ${6 - n} kursi kosong dengan bot supaya bisa mulai? Pemain baru tetap bisa masuk sampai sidang dimulai.</p><button data-a="fillBots" class="${btn('istana')} mt-3 w-full">🤖 Isi kekurangan dengan bot</button>` : '<p class="text-sm text-zinc-400 mt-1">Pemegang palu bisa mengisi kursi kosong dengan bot.</p>'}</div>`;
+    if (pub && n < 6) return `<div class="mt-4 rounded-2xl bg-ink-800/60 ring-1 ring-white/10 p-3 text-sm text-zinc-400">🌐 Room publik • menunggu ${6 - n} orang lagi, lalu mulai otomatis dalam 60 detik.</div>`;
+    return '';
   }
   function scrLobby() {
     const creator = M.id === V.creatorId, n = V.players.length, dc = V.dist || { d: [], dark: 0, ref: 0, warga: 0, valid: false };
@@ -1091,11 +1208,13 @@ window.makeLocalPlay = function () {
           <div><p class="text-xs uppercase tracking-[.2em] text-zinc-400">Ruang Tunggu DPR</p><h2 class="font-display text-4xl uppercase">Menunggu Peserta</h2></div>
           <button data-a="copyCode" class="group flex items-center gap-3 rounded-2xl bg-ink-800 ring-1 ring-istana/30 px-4 py-2 hover:ring-istana"><span class="font-mono text-3xl tracking-[.3em] text-istana">${esc(V.code)}</span><span class="text-xs text-zinc-400 group-hover:text-istana">⧉ Salin</span></button>
         </div>
-        <p class="mt-2 text-sm text-zinc-400"><span class="font-mono text-zinc-200">${n}/12</span> hadir • minimal 6 untuk memulai${creator ? ' • kurang orang? tambahkan bot' : ''}</p>
+        <p class="mt-2 text-sm text-zinc-400"><span class="font-mono text-zinc-200">${n}/12</span> hadir • minimal 6 untuk memulai${window.NET.active === 'local' ? ' • latihan offline' : V.settings.public ? ' • 🌐 publik' : ' • 🔒 privat'}</p>
+        ${lobbyBanner(creator, n)}
         <div class="mt-5 grid grid-cols-3 sm:grid-cols-4 gap-3">
           ${V.players.map((p) => `<div class="relative rounded-2xl bg-ink-800 ring-1 ${p.id === M.id ? 'ring-istana/50' : 'ring-white/10'} p-3 flex flex-col items-center gap-1 rise">
               ${p.id === V.creatorId ? '<span class="absolute -top-2 -right-2 text-[10px] rounded-full bg-istana text-ink px-1.5 font-bold">PALU</span>' : ''}
-              ${creator && p.id !== M.id ? `<button data-a="kick" data-v="${esc(p.id)}" class="absolute top-1 left-1 size-6 rounded-md text-xs text-zinc-500 hover:bg-korup hover:text-white" title="Keluarkan">✕</button>` : ''}
+              ${creator && p.id !== M.id ? `<button data-a="kick" data-v="${esc(p.id)}" class="absolute top-1 left-1 size-7 rounded-md text-xs text-zinc-500 hover:bg-korup hover:text-white" title="Keluarkan" aria-label="Keluarkan ${nm(p)}">✕</button>` : ''}
+              ${!p.bot && p.id !== M.id ? `<button data-a="mute" data-v="${esc(p.id)}" class="absolute bottom-1 right-1 size-7 rounded-md text-xs ${U.muted.has(p.id) ? 'bg-white/10' : 'text-zinc-600 hover:bg-white/10'}" title="${U.muted.has(p.id) ? 'Bunyikan' : 'Bisukan'}" aria-label="Bisukan ${nm(p)}">${U.muted.has(p.id) ? '🔇' : '🔈'}</button>` : ''}
               <div class="text-3xl">${persona(p.persona).e}</div><div class="font-semibold truncate max-w-full">${nm(p)}${tag(p)}${p.id === M.id ? ' <span class="text-xs text-istana">(Anda)</span>' : ''}</div>
               <div class="text-[11px] text-zinc-500 truncate max-w-full">${persona(p.persona).n}</div></div>`).join('')}
           ${creator && n < 12 ? '<button data-a="addBot" class="rounded-2xl border-2 border-dashed border-white/15 grid place-items-center text-sm text-zinc-400 hover:text-white hover:border-istana/60 min-h-[104px]">🤖 + Tambah Bot</button>' : ''}
@@ -1112,6 +1231,9 @@ window.makeLocalPlay = function () {
       </section>
       <aside class="rounded-2xl bg-ink-800/80 ring-1 ring-white/10 p-5 h-fit md:sticky md:top-6 rise">
         ${sectionTitle('Pengaturan Sidang' + (creator ? ' • Anda pemegang palu' : ''))}
+        ${window.NET.listRooms && window.NET.active !== 'local' ? `<div class="mt-4 flex items-center justify-between"><span>${s.public ? '🌐 Room publik' : '🔒 Room privat'}</span>
+          <button data-a="visibility" role="switch" aria-checked="${!!s.public}" ${creator ? '' : 'disabled'} class="relative h-7 w-14 rounded-full transition ${s.public ? 'bg-reform' : 'bg-white/15'} disabled:opacity-60"><span class="absolute top-1 ${s.public ? 'left-8' : 'left-1'} size-5 rounded-full bg-ink transition-all"></span></button></div>
+        <p class="text-xs text-zinc-500 mt-1">${s.public ? 'Tampil di Cari Room & Main Cepat. Mulai otomatis 60 detik setelah 6 orang.' : 'Hanya yang punya kode. Mulai manual. Cocok untuk main bareng teman.'}</p>` : ''}
         <div class="mt-4 flex items-center justify-between"><span>Distribusi role</span>
           <button data-a="autoDist" role="switch" aria-checked="${s.auto}" ${creator ? '' : 'disabled'} class="relative h-7 w-14 rounded-full transition ${s.auto ? 'bg-reform' : 'bg-white/15'} disabled:opacity-60"><span class="absolute top-1 ${s.auto ? 'left-8' : 'left-1'} size-5 rounded-full bg-ink transition-all"></span></button></div>
         <p class="text-xs text-zinc-500 mt-1">${s.auto ? 'Otomatis mengikuti jumlah pemain.' : 'Manual — Warga Sipil mengisi sisa kursi.'}</p>
@@ -1303,7 +1425,7 @@ window.makeLocalPlay = function () {
   // ------------------------------------------------------- SIDANG
   function chatLine(c) {
     if (c.sys) return `<p class="mx-auto text-center text-xs text-zinc-500 italic px-4">${esc(c.text)}</p>`;
-    const p = P(c.from); if (!p) return '';
+    const p = P(c.from); if (!p || U.muted.has(c.from)) return '';
     const mine = c.from === M.id, isP = c.from === V.presidentId;
     if (c.letter) return `<div class="max-w-[85%] ${mine ? 'ml-auto' : ''}"><p class="text-[10px] text-zinc-500 mb-0.5">📜 Surat dari balik jeruji • ${nm(p)}</p><div class="bg-kertas text-ink rounded-lg px-3 py-2 font-mono text-sm -rotate-[.5deg]">${esc(c.text)}</div></div>`;
     return `<div class="flex gap-2 ${mine ? 'flex-row-reverse' : ''}"><div class="size-8 shrink-0 rounded-xl bg-ink-700 grid place-items-center">${persona(p.persona).e}</div>
@@ -1312,7 +1434,7 @@ window.makeLocalPlay = function () {
   function chatPanel(title, h) {
     const mine = me(), canChat = !mine.jailed, canLetter = mine.jailed && !M.letterUsed && ['SIDANG', 'DECISION'].includes(V.phase);
     return `<div class="flex flex-col rounded-2xl bg-ink-800/50 ring-1 ring-white/10 ${h}">
-      <div class="px-4 py-3 border-b border-white/5 flex justify-between items-center">${sectionTitle('💬 ' + title)}<span class="text-[10px] text-zinc-500">${V.players.filter((p) => !p.bot && p.connected).length} online</span></div>
+      <div class="px-4 py-3 border-b border-white/5 flex justify-between items-center">${sectionTitle('💬 ' + title)}<span class="flex items-center gap-2"><span class="text-[10px] text-zinc-500">${V.players.filter((p) => !p.bot && p.connected).length} online</span><button data-a="muteMenu" class="text-[11px] rounded-md px-2 py-1 bg-white/5 hover:bg-white/10" title="Bisukan pemain">🔇${U.muted.size ? ' ' + U.muted.size : ''}</button></span></div>
       <div class="flex-1 overflow-y-auto p-4 space-y-3" data-scroll-key="chat" data-autoscroll aria-live="polite">${V.chat.map(chatLine).join('')}</div>
       <div class="px-3 pt-2 flex gap-1">${REACTS.map((e) => `<button data-a="react" data-v="${e}" class="size-9 rounded-lg hover:bg-white/10 ${canChat ? '' : 'opacity-30 pointer-events-none'}">${e}</button>`).join('')}</div>
       <form data-form="chat" class="flex gap-2 p-3 border-t border-white/5"><input id="chatInput" name="t" maxlength="200" autocomplete="off" ${canChat || canLetter ? '' : 'disabled'} placeholder="${canChat ? 'Sampaikan pendapat Anda…' : canLetter ? '📜 Tulis surat dari balik jeruji (1x hari ini)' : 'Anda di rutan. Surat hari ini sudah terkirim.'}" class="flex-1 min-w-0 h-11 rounded-xl ${canLetter ? 'bg-kertas text-ink font-mono' : 'bg-ink-800'} px-4 text-base md:text-sm outline-none focus:ring-1 focus:ring-reform disabled:opacity-50">
@@ -1438,6 +1560,9 @@ window.makeLocalPlay = function () {
       <div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Batal</button><button class="${btn('istana')}">Ajukan Banding</button></div></form></div>`;
     if (md && md.type === 'headline') h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><form data-form="headline" class="w-[min(92vw,460px)] rounded-2xl bg-ink-800 ring-1 ring-berita/50 p-6 rise"><p class="font-display text-3xl uppercase text-berita">📰 Hak Headline</p><p class="text-sm text-zinc-400">Tulisan Anda tayang di Breaking News pagi berikutnya sebagai “Kolom dari Balik Jeruji”. Maks. 90 karakter, sekali pakai.</p>
       <input id="headlineText" name="t" maxlength="90" autocomplete="off" class="mt-4 w-full h-12 rounded-xl bg-kertas text-ink font-mono text-base px-3 outline-none" placeholder="Yang menjebloskan saya…"><div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Nanti</button><button class="${btn('istana')}">Kirim ke Redaksi</button></div></form></div>`;
+    if (md && md.type === 'mute' && V && M) h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><div class="w-[min(92vw,400px)] rounded-2xl bg-ink-800 ring-1 ring-white/15 p-5 rise"><p class="font-display text-2xl uppercase">🔇 Bisukan Pemain</p><p class="text-sm text-zinc-400">Pesan dari pemain yang dibisukan tidak tampil di layar Anda. Hanya berlaku di HP Anda.</p>
+      <div class="mt-3 max-h-[50vh] overflow-y-auto divide-y divide-white/5">${V.players.filter((p) => !p.bot && p.id !== M.id).map((p) => `<button data-a="mute" data-v="${esc(p.id)}" class="w-full flex items-center gap-3 py-2.5 text-left"><span class="text-2xl">${persona(p.persona).e}</span><span class="flex-1">${nm(p)}</span><span class="text-xs rounded-full px-2 py-1 ${U.muted.has(p.id) ? 'bg-korup text-white' : 'bg-white/10'}">${U.muted.has(p.id) ? 'Dibisukan' : 'Bisukan'}</span></button>`).join('') || '<p class="py-3 text-sm text-zinc-500">Tidak ada pemain lain.</p>'}</div>
+      <button data-a="modalClose" class="${btn('ghost')} w-full mt-4">Tutup</button></div></div>`;
     if (md && md.type === 'peek' && M && M.role) h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4" data-a="modalClose"><div class="w-[min(86vw,320px)] rise">${roleCardFront(M.role)}<div class="mt-3">${allyBox()}</div><p class="mt-3 text-xs text-zinc-500 text-center">Ketuk di mana saja untuk menutup</p></div></div>`;
     patch(document.getElementById('overlay'), h);
     bindHold();
@@ -1482,6 +1607,7 @@ window.makeLocalPlay = function () {
     let html;
     if (U.screen === 'LANDING') html = scrLanding();
     else if (U.screen === 'IDENTITY') html = scrIdentity();
+    else if (U.screen === 'ROOMS') html = scrRooms();
     else if (!V || !M) html = '<div class="min-h-screen grid place-items-center text-zinc-400">⏳ Memuat ruang sidang…</div>';
     else if (!M.role && V.phase !== 'LOBBY') html = '<div class="min-h-screen grid place-items-center text-zinc-400 p-6 text-center">⏳ Sidang sedang berjalan. Anda akan ikut di ronde berikutnya.</div>';
     else html = (SCREENS[V.phase] || scrLobby)();
@@ -1499,6 +1625,8 @@ window.makeLocalPlay = function () {
   }
   setInterval(() => {
     tickTimers();
+    if (V && V.lobby && V.lobby.cdAt) { const sec = Math.max(0, Math.ceil((V.lobby.cdAt - now()) / 1000)); document.querySelectorAll('[data-cd]').forEach((e) => { e.textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; e.classList.toggle('text-korup', sec <= 10); }); }
+    if (U.screen === 'ROOMS' && Date.now() - U.roomsAt > 5000) loadRooms();
     if (V && V.phase === 'NIGHT') { const idx = Math.floor(Date.now() / 6000); if (idx !== U.bannerIdx) { U.bannerIdx = idx; const b = document.querySelector('[data-banner]'); if (b) b.textContent = NIGHT_BANNERS[idx % NIGHT_BANNERS.length]; } }
   }, 250);
 
@@ -1515,13 +1643,18 @@ window.makeLocalPlay = function () {
   }
 
   // ------------------------------------------------------- ACTIONS
+  async function loadRooms() {
+    U.roomsAt = Date.now();
+    const r = await window.NET.listRooms(); if (U.screen !== 'ROOMS') return;
+    U.rooms = r === null ? false : r; render();
+  }
   async function enter() {
     const name = U.nick.trim(); if (!name || !U.persona) return;
     LS.set('mdu_nick', name); LS.set('mdu_persona', U.persona);
     U.busy = true; U.err = ''; render();
     try {
       const r = U.mode === 'local' ? await window.NET.local({ name, persona: U.persona })
-        : await window.NET.connect({ action: U.mode, code: U.joinCode.join(''), name, persona: U.persona });
+        : await window.NET.connect({ action: U.mode, code: U.joinCode.join(''), name, persona: U.persona, pub: U.pub });
       if (r && r.err) { U.err = r.err; U.busy = false; render(); return; }
       U.busy = false; U.screen = 'GAME'; render();
     } catch (e) { U.err = 'Gagal terhubung: ' + (e && e.message ? e.message : e); U.busy = false; render(); }
@@ -1535,6 +1668,16 @@ window.makeLocalPlay = function () {
     goCreate() { U.mode = 'create'; U.err = ''; U.screen = 'IDENTITY'; render(); },
     goJoin() { const code = U.joinCode.join(''); if (!/^\d{4}$/.test(code)) { U.err = 'Masukkan 4 digit kode room.'; render(); return; } U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
     goLocal() { U.mode = 'local'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goQuick() { U.mode = 'quick'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goRooms() { U.err = ''; U.screen = 'ROOMS'; U.rooms = null; render(); loadRooms(); },
+    refreshRooms() { U.rooms = null; render(); loadRooms(); },
+    pickRoom(v) { U.joinCode = String(v).split(''); U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    setPub(v) { U.pub = v === '1'; LS.set('mdu_pub', U.pub ? '1' : '0'); render(); },
+    extend() { send({ t: 'extend' }); },
+    fillBots() { send({ t: 'fillBots' }); },
+    visibility() { send({ t: 'visibility', public: !V.settings.public }); },
+    mute(v) { if (U.muted.has(v)) U.muted.delete(v); else U.muted.add(v); render(); },
+    muteMenu() { U.modal = { type: 'mute' }; renderOverlay(); },
     back() { U.screen = 'LANDING'; U.err = ''; render(); },
     persona(v) { U.persona = v; render(); },
     enter,

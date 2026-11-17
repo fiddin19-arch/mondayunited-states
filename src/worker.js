@@ -1,7 +1,8 @@
 /* Mondayunited States — versi Cloudflare Workers.
  * - Halaman (public/index.html) disajikan oleh Workers Static Assets.
  * - Setiap room = satu Durable Object "Room" yang memegang state rahasia dan koneksi WebSocket.
- * - Tidak ada pemain yang menjadi host; Durable Object-lah host-nya.
+ * - Satu Durable Object "Directory" menyimpan daftar room publik (untuk Cari Room & Main Cepat).
+ * - Mesin game jalan di Durable Object, jadi game tetap berjalan walau pembuat room keluar.
  */
 import * as EngineModule from './engine.js';
 const Engine = globalThis.Engine || EngineModule.default || EngineModule;
@@ -19,13 +20,23 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/healthz') return new Response('ok');
     if (url.pathname === '/api/create' && request.method === 'POST') {
-      for (let i = 0; i < 12; i++) {
-        const code = String(1000 + Math.floor(Math.random() * 9000));
-        const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-        const r = await stub.fetch('https://room/init?code=' + code, { method: 'POST' });
-        if (r.status === 200) return json({ code });
+      let pub = true; try { const b = await request.json(); pub = b && b.public !== false; } catch (e) {}
+      return createRoom(env, pub);
+    }
+    if (url.pathname === '/api/rooms' && request.method === 'GET') {
+      if (!env.DIR) return json({ rooms: [] });
+      return dirStub(env).fetch('https://dir/list');
+    }
+    if (url.pathname === '/api/quick' && request.method === 'POST') {
+      // Main Cepat: room publik yang paling hampir penuh; kalau tidak ada, buat baru.
+      if (env.DIR) {
+        let skip = []; try { const b = await request.json(); if (b && Array.isArray(b.skip)) skip = b.skip.map(String).slice(0, 20); } catch (e) {}
+        const r = await (await dirStub(env).fetch('https://dir/list')).json();
+        const pick = (r.rooms || []).find((x) => x.n < 12 && !skip.includes(x.code));
+        if (pick) return json({ code: pick.code, created: false });
       }
-      return json({ err: 'Semua kursi sidang sedang terpakai. Coba lagi sebentar.' }, 503);
+      const r = await createRoom(env, true); const j = await r.json();
+      return json(Object.assign(j, { created: true }), r.status);
     }
     const m = /^\/ws\/(\d{4})$/.exec(url.pathname);
     if (m) {
@@ -46,6 +57,41 @@ export default {
   },
 };
 
+async function createRoom(env, pub) {
+  for (let i = 0; i < 12; i++) {
+    const code = String(1000 + Math.floor(Math.random() * 9000));
+    const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
+    const r = await stub.fetch('https://room/init?code=' + code + '&pub=' + (pub ? 1 : 0), { method: 'POST' });
+    if (r.status === 200) return json({ code });
+  }
+  return json({ err: 'Semua kursi sidang sedang terpakai. Coba lagi sebentar.' }, 503);
+}
+const dirStub = (env) => env.DIR.get(env.DIR.idFromName('main'));
+
+/* Daftar room publik. Hanya di memori: setiap room aktif melapor ulang tiap 20 detik,
+ * jadi kalau Directory sempat tertidur, daftarnya pulih sendiri. */
+const DIR_TTL_MS = 50000;
+export class Directory {
+  constructor(state, env) { this.rooms = new Map(); }
+  async fetch(request) {
+    const url = new URL(request.url), now = Date.now();
+    if (url.pathname === '/report' && request.method === 'POST') {
+      let r; try { r = await request.json(); } catch (e) { return new Response('bad', { status: 400 }); }
+      if (!r || !/^\d{4}$/.test(String(r.code))) return new Response('bad', { status: 400 });
+      if (r.gone) this.rooms.delete(r.code); else this.rooms.set(r.code, Object.assign(r, { at: now }));
+      return new Response('ok');
+    }
+    if (url.pathname === '/list') {
+      for (const [k, v] of this.rooms) if (now - v.at > DIR_TTL_MS) this.rooms.delete(k);
+      const list = [...this.rooms.values()].filter((r) => r.pub && r.phase === 'LOBBY' && r.humans > 0 && r.n < 12)
+        .sort((a, b) => b.n - a.n || a.at - b.at).slice(0, 30)
+        .map((r) => ({ code: r.code, host: r.host, n: r.n, humans: r.humans, cdLeft: r.cdAt ? Math.max(0, Math.round((r.cdAt - now) / 1000)) : 0 }));
+      return json({ rooms: list, now });
+    }
+    return new Response('not found', { status: 404 });
+  }
+}
+
 async function pidFromToken(token) {
   const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mdu:' + token));
   return 'p_' + Array.from(new Uint8Array(h).slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -63,7 +109,8 @@ export class Room {
     if (url.pathname === '/init') {
       const now = Date.now();
       if (this.G && now - (this.G.updatedAt || 0) < STALE_MS) return new Response('busy', { status: 409 });
-      this.G = Engine.create(url.searchParams.get('code'), null, now);
+      this.G = Engine.create(url.searchParams.get('code'), null, now, { public: url.searchParams.get('pub') === '1' });
+      this.lastReport = ''; this.reportedAt = 0;
       await this.state.storage.put('G', this.G);
       return new Response('ok');
     }
@@ -150,9 +197,20 @@ export class Room {
   }
   startTicking() {
     if (this.timer) return;
-    this.timer = setInterval(() => { if (this.G && Engine.tick(this.G, Date.now())) this.push(); }, 200);
+    this.timer = setInterval(() => { if (this.G && Engine.tick(this.G, Date.now())) this.push(); else this.report(); }, 200);
   }
-  stopTicking() { if (this.timer) { clearInterval(this.timer); this.timer = null; } }
+  stopTicking() { if (this.timer) { clearInterval(this.timer); this.timer = null; } this.report(true); }
+
+  // Lapor ke Directory saat ringkasan berubah, atau tiap 20 detik sebagai detak.
+  report(gone) {
+    if (!this.G || !this.env || !this.env.DIR) return;
+    const now = Date.now(), s = Engine.summary(this.G, now); delete s.at;
+    const key = gone ? 'gone' : JSON.stringify(s);
+    if (key === this.lastReport && now - (this.reportedAt || 0) < 20000) return;
+    this.lastReport = key; this.reportedAt = now;
+    const body = JSON.stringify(gone ? { code: this.G.code, gone: true } : s);
+    try { this.env.DIR.get(this.env.DIR.idFromName('main')).fetch('https://dir/report', { method: 'POST', body, headers: { 'content-type': 'application/json' } }).catch(() => {}); } catch (e) {}
+  }
 
   push(force) {
     const G = this.G; if (!G) return;
@@ -164,7 +222,7 @@ export class Room {
         this.send(ws, { t: 'state', pub, priv: Engine.privateView(G, pid) });
       }
     }
-    this.save();
+    this.save(); this.report();
   }
   save(now) {
     if (!this.G) return;

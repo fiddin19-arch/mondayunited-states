@@ -97,7 +97,13 @@
   const persona = (id) => PERSONAS.find((x) => x.id === id) || PERSONAS[0];
   const pad2 = (n) => String(n).padStart(2, '0');
   const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-  const active = (p) => p.bot || p.connected; // pemain yang ditunggu
+  const ai = (p) => !!(p.bot || p.auto);           // dikendalikan mesin (bot atau autopilot AFK)
+  const active = (p) => ai(p) || p.connected;      // pemain yang ditunggu
+  const LOBBY_CD = 60000, LOBBY_EXT_MAX = 5, BOT_OFFER_MS = 180000, GHOST_MS = 90000, HOST_GRACE_MS = 15000, AFK_MS = 120000;
+  // Filter kata kasar sederhana (huruf boleh diulang: "anjiiing")
+  const BAD = ['anjing', 'anjeng', 'anjir', 'bangsat', 'bajingan', 'babi', 'kontol', 'memek', 'ngentot', 'entot', 'jancok', 'jancuk', 'cok', 'asu', 'goblok', 'goblog', 'tolol', 'kampret', 'keparat', 'pepek', 'peler', 'titit', 'puki', 'lonte', 'pelacur', 'perek', 'tai', 'taik', 'bego', 'idiot', 'fuck', 'shit', 'bitch'];
+  const BAD_RE = new RegExp('(^|[^a-z])(' + BAD.map((w) => w.split('').map((c) => c + '+').join('')).join('|') + ')(?=$|[^a-z])', 'gi');
+  const filt = (t) => String(t).replace(BAD_RE, (m, pre, w) => pre + w[0] + '*'.repeat(Math.max(2, w.length - 1)));
 
   const openCases = (G) => G.cases.filter((c) => !c.vetoed && !c.closed && P(G, c.suspect) && !P(G, c.suspect).jailed);
   const caseSuspects = (G) => openCases(G).map((c) => c.suspect);
@@ -113,11 +119,12 @@
   function later(G, step, ms, now, arg) { G.pending = { at: now + ms, step, arg: arg == null ? null : arg }; }
 
   // ---------------------------------------------------------------- CREATE
-  function create(code, creatorId, now) {
-    now = now || Date.now();
+  function create(code, creatorId, now, opts) {
+    now = now || Date.now(); opts = opts || {};
     return {
       v: 3, code: String(code), creatorId, phase: 'LOBBY', phaseStart: now, phaseDur: 0, endsAt: 0, pending: null, rev: 1, seq: 0,
-      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {} },
+      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {}, public: !!opts.public },
+      lobby: { cdAt: 0, ext: 0, openedAt: now }, banned: {},
       players: [], day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true,
       cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null,
       nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null,
@@ -130,10 +137,11 @@
   function join(G, pid, info, now) {
     now = now || Date.now();
     const ex = P(G, pid);
-    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, clean(info.name, 14) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, filt(clean(info.name, 14)) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (G.banned && G.banned[pid]) return { err: 'Anda sudah dikeluarkan dari room ini oleh pemegang palu.' };
     if (G.phase !== 'LOBBY') return { err: 'Sidang sudah berjalan. Tunggu ronde berikutnya.' };
     if (G.players.length >= MAX_PLAYERS) return { err: 'Ruang sidang penuh (12 kursi).' };
-    const p = blankPlayer(pid, uniqueName(G, clean(info && info.name, 14) || 'Warga', pid), null, false);
+    const p = blankPlayer(pid, uniqueName(G, filt(clean(info && info.name, 14)) || 'Warga', pid), null, false);
     G.players.push(p); setPersona(G, p, info && info.persona);
     if (!G.creatorId || !P(G, G.creatorId)) G.creatorId = pid;
     sys(G, `📝 ${p.name} hadir di ruang sidang.`);
@@ -168,6 +176,7 @@
     const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
     shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
     Object.assign(G, { sadapNight: {}, lastBadDay: -9, grasiUsed: false, day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    G.lobby = Object.assign(G.lobby || {}, { cdAt: 0 });
     G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
     setPhase(G, 'REVEAL', FIXED_T.reveal, now);
     return { ok: true };
@@ -319,7 +328,7 @@
     // 3. Koruptor: berita JELEK (fitnah) atau berita BAGUS (pencitraan)
     let tgt = null, cid = null, good = false;
     const kor = scandalActors(G);
-    if (!G.korChoice && kor.length && kor.every((k) => k.bot)) botScandal(G, rnd(kor));
+    if (!G.korChoice && kor.length && kor.every(ai)) botScandal(G, rnd(kor));
     if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; good = !!G.korChoice.good; visits[G.korChoice.by] = tgt; } }
     if (cid) G.deck = G.deck.filter((x) => x !== cid);
     // 4. Buzzer
@@ -443,7 +452,7 @@
       const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects(); if (s.role === 'KPK') G.kpkEverJailed = true;
       title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
       if (s.role === 'JURNALIS') {
-        if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
+        if (ai(s)) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
         else { s.headlineRight = true; note(G, s.id, '📰 Anda mendapat Hak Headline. Tulis dari sel Anda di Rutan Negara.', 'istana'); }
       }
     } else if (kind === 'FREE') {
@@ -488,7 +497,7 @@
     switch (a.t) {
       // lobby
       case 'persona': if (ph !== 'LOBBY') return; setPersona(G, me, a.persona); return { ok: true };
-      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, clean(a.name, 14) || me.name, me.id); return { ok: true };
+      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, filt(clean(a.name, 14)) || me.name, me.id); return { ok: true };
       case 'settings': {
         if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room.' };
         const s = a.settings || {}; if (typeof s.auto === 'boolean') G.settings.auto = s.auto;
@@ -501,20 +510,37 @@
       case 'kick': {
         if (ph !== 'LOBBY' || !isCreator || a.id === me.id) return { err: 'Tidak bisa.' };
         const i = G.players.findIndex((p) => p.id === a.id); if (i < 0) return { err: 'Tidak ada.' };
-        const [p] = G.players.splice(i, 1); if (!p.bot) sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); return { ok: true };
+        const [p] = G.players.splice(i, 1); if (!p.bot) { G.banned = G.banned || {}; G.banned[p.id] = true; sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); } return { ok: true };
       }
       case 'leave': {
-        if (ph !== 'LOBBY') { me.connected = false; return { ok: true }; }
+        if (ph !== 'LOBBY') { me.connected = false; me.offAt = now; if (ph !== 'END') setAuto(G, me, true, now); else ensureHost(G, now, true); return { ok: true }; }
         G.players = G.players.filter((p) => p.id !== me.id); sys(G, `🚪 ${me.name} meninggalkan ruang sidang.`);
-        if (isCreator) { const h = G.players.find((p) => !p.bot); G.creatorId = h ? h.id : null; if (h) sys(G, `🔁 ${h.name} kini memegang palu sidang.`); }
+        if (isCreator) ensureHost(G, now, true);
         return { ok: true };
       }
-      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room yang bisa memulai.' }; return startGame(G, now);
+      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu yang bisa memulai.' }; return startGame(G, now);
+      case 'extend': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        if (!G.lobby.cdAt) return { err: 'Hitung mundur belum berjalan.' };
+        if (G.lobby.ext >= LOBBY_EXT_MAX) return { err: `Sudah ditambah ${LOBBY_EXT_MAX}x. Mulai saja, yuk.` };
+        G.lobby.ext++; G.lobby.cdAt += LOBBY_CD; sys(G, `⏳ ${me.name} menambah waktu tunggu 60 detik.`); return { ok: true };
+      }
+      case 'fillBots': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        let k = 0; while (G.players.length < MIN_PLAYERS) { if (addBot(G).err) break; k++; }
+        if (k) sys(G, `🤖 ${k} bot ikut mengisi kursi kosong.`); return { ok: true };
+      }
+      case 'visibility': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        G.settings.public = !!a.public; if (!G.settings.public) G.lobby.cdAt = 0;
+        sys(G, G.settings.public ? '🌐 Room dibuka untuk umum.' : '🔒 Room dijadikan privat (hanya lewat kode).'); return { ok: true };
+      }
       case 'replay': {
         if (ph !== 'END' || !isCreator) return { err: 'Hanya pembuat room.' };
         G.players = G.players.filter((p) => p.bot || p.connected);
-        G.players.forEach((p) => Object.assign(p, { role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
+        G.players.forEach((p) => Object.assign(p, { auto: false, role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
         Object.assign(G, { winner: null, reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
+        G.lobby = { cdAt: 0, ext: 0, openedAt: now };
         G.chat = []; sys(G, '🔁 Ruang sidang dibuka lagi. Ronde baru!'); setPhase(G, 'LOBBY', 0, now); return { ok: true };
       }
       // reveal
@@ -537,13 +563,13 @@
       case 'chat': case 'react': {
         if (!['LOBBY', 'ELECTION', 'SIDANG', 'DECISION', 'END'].includes(ph)) return { err: 'Chat dibuka saat siang.' };
         if (me.jailed) return { err: 'Napi hanya bisa mengirim surat.' };
-        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : clean(a.text, 200);
+        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : filt(clean(a.text, 200));
         if (!text) return; if (now - me.lastChatAt < 1200) return { err: 'Pelan-pelan, 1 pesan per 1,2 detik.' };
         me.lastChatAt = now; say(G, me.id, text); return { ok: true };
       }
       case 'letter': {
         if (!['SIDANG', 'DECISION'].includes(ph) || !me.jailed || me.letterDay === G.day) return { err: 'Surat hari ini sudah terkirim.' };
-        const text = clean(a.text, 200); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
+        const text = filt(clean(a.text, 200)); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
       }
       case 'sign': {
         if (!['SIDANG', 'DECISION'].includes(ph) || me.jailed || me.id === G.presidentId || G.decided || G.carryover || G.presidentId == null || G.pending) return { err: 'Petisi tidak bisa ditandatangani sekarang.' };
@@ -559,7 +585,7 @@
       }
       case 'headline': {
         if (!me.jailed || !me.headlineRight) return { err: 'Tidak punya Hak Headline.' };
-        const text = clean(a.text, 90); if (!text) return { err: 'Headline kosong.' };
+        const text = filt(clean(a.text, 90)); if (!text) return { err: 'Headline kosong.' };
         me.headlineRight = false; G.pendingColumn = { by: me.id, text }; note(G, me.id, '📰 Headline Anda masuk antrean redaksi untuk pagi berikutnya.', 'istana'); return { ok: true };
       }
       case 'testify': {
@@ -586,6 +612,7 @@
   function tick(G, now) {
     now = now || Date.now();
     const before = G.rev;
+    housekeeping(G, now);
     if (G.pending && now >= G.pending.at) {
       const { step, arg } = G.pending; G.pending = null;
       if (step === 'startElection') startElection(G, arg || 'awal', now);
@@ -614,7 +641,9 @@
   }
   function setConnected(G, pid, on, now) {
     const p = P(G, pid); if (!p || p.bot || p.connected === on) return false;
-    p.connected = on; bump(G, now || Date.now());
+    now = now || Date.now();
+    p.connected = on; if (!on) p.offAt = now; bump(G, now);
+    if (on && p.auto) setAuto(G, p, false, now);
     // Pemain yang putus tidak boleh menahan fase
     if (!on) {
       if (G.phase === 'NIGHT') maybeEndNight(G, now);
@@ -624,11 +653,49 @@
     return true;
   }
 
+  // ---------------------------------------------- ROOM ONLINE: host, lobi, AFK
+  function setAuto(G, p, on, now) {
+    if (!p || p.bot || !!p.auto === on) return;
+    p.auto = on;
+    if (on) { sys(G, `🤖 ${p.name} AFK — autopilot mengambil alih sampai ia kembali.`); if (!['LOBBY', 'END'].includes(G.phase)) G.botAt[p.id] = now + 1200; }
+    else { sys(G, `👋 ${p.name} kembali ke sidang.`); delete G.botAt[p.id]; }
+    bump(G, now);
+  }
+  // Palu sidang pindah ke manusia yang paling lama hadir dan masih tersambung.
+  function ensureHost(G, now, force) {
+    const h = P(G, G.creatorId);
+    const ok = h && !h.bot && (h.connected || (!force && now - (h.offAt || now) < HOST_GRACE_MS));
+    if (ok) return false;
+    const next = G.players.find((p) => !p.bot && p.connected && p.id !== G.creatorId);
+    if (!next) { if (!h) G.creatorId = null; return false; }
+    G.creatorId = next.id; sys(G, `🔁 ${next.name} kini memegang palu sidang.`); bump(G, now); return true;
+  }
+  function housekeeping(G, now) {
+    if (!G.lobby) G.lobby = { cdAt: 0, ext: 0, openedAt: now };
+    if (G.phase === 'LOBBY' || G.phase === 'END') ensureHost(G, now, false);
+    if (G.phase === 'LOBBY') {
+      // kursi hantu: pemain yang putus lama di lobi dikeluarkan supaya kursi bisa dipakai orang lain
+      const ghosts = G.players.filter((p) => !p.bot && !p.connected && now - (p.offAt || now) > GHOST_MS);
+      if (ghosts.length) {
+        G.players = G.players.filter((p) => !ghosts.includes(p));
+        ghosts.forEach((p) => sys(G, `🚪 ${p.name} terputus terlalu lama dan keluar dari ruang tunggu.`));
+        ensureHost(G, now, true); bump(G, now);
+      }
+      const L = G.lobby, valid = distCounts(G).valid && G.players.some((p) => !p.bot);
+      if (G.settings.public && valid && !L.cdAt) { L.cdAt = now + LOBBY_CD; L.ext = 0; sys(G, '⏱️ Kursi cukup! Sidang mulai otomatis dalam 60 detik.'); bump(G, now); }
+      else if (L.cdAt && (!valid || !G.settings.public)) { L.cdAt = 0; if (!valid) sys(G, '⏸️ Hitung mundur dibatalkan, pemain kurang.'); bump(G, now); }
+      if (L.cdAt && G.players.length >= MAX_PLAYERS && L.cdAt - now > 10000) { L.cdAt = now + 10000; sys(G, '🪑 Kursi penuh! Mulai dalam 10 detik.'); bump(G, now); }
+      if (L.cdAt && now >= L.cdAt) { L.cdAt = 0; if (startGame(G, now).ok) bump(G, now); }
+    } else if (G.phase !== 'END') {
+      for (const p of G.players) if (!p.bot && !p.auto && !p.connected && now - (p.offAt || now) > AFK_MS) setAuto(G, p, true, now);
+    }
+  }
+
   // ------------------------------------------------------------------ BOTS
-  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (p.bot) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
+  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (ai(p)) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
   function runBots(G, now) {
     for (const p of G.players) {
-      if (!p.bot) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
+      if (!ai(p)) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
       delete G.botAt[p.id];
       const next = botAct(G, p, now); if (next) G.botAt[p.id] = now + next;
       bump(G, now);
@@ -663,7 +730,7 @@
       const o = others(); let a = { kind: 'DUMMY' };
       switch (p.role) {
         case 'KORUPTOR': {
-          const humans = scandalActors(G).filter((x) => !x.bot);
+          const humans = scandalActors(G).filter((x) => !ai(x));
           if (G.korChoice) a = { kind: 'AGREE' };
           else if (!humans.length || now > G.endsAt - 6000) { botScandal(G, p); if (!G.korChoice) return 0; a = { kind: 'AGREE' }; }
           else return Math.max(1000, G.endsAt - 5000 - now);
@@ -683,7 +750,7 @@
         case 'PENGAMAT': if (o.length) a = { kind: 'OBSERVE', target: rnd(o).id }; break;
       }
       // Plt. Koruptor bot
-      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every((x) => x.bot) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
+      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every(ai) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
       const res = nightAction(G, p, a, now); if (res.err) nightAction(G, p, { kind: p.role === 'BROKER' ? 'PASS' : p.role === 'KPK' ? 'INVESTIGATE' : 'DUMMY', target: o.length ? rnd(o).id : null }, now);
       return 0;
     }
@@ -733,8 +800,9 @@
     const end = G.phase === 'END', e = G.election;
     return {
       code: G.code, rev: G.rev, now, phase: G.phase, endsAt: G.endsAt, phaseDur: G.phaseDur, phaseStart: G.phaseStart, locked: !!G.pending,
-      day: G.day, creatorId: G.creatorId, settings: G.settings, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
-      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
+      day: G.day, creatorId: G.creatorId, settings: G.settings,
+      lobby: G.phase === 'LOBBY' && G.lobby ? { cdAt: G.lobby.cdAt, ext: G.lobby.ext, extMax: LOBBY_EXT_MAX, botOffer: !!G.settings.public && G.players.length < MIN_PLAYERS && now - G.lobby.openedAt >= BOT_OFFER_MS } : null, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
+      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, afk: !!p.auto, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
       scandal: G.scandal, presidentId: G.presidentId, term: G.term, vetoAvailable: G.vetoAvailable, plt: !!G.plt,
       cases: G.cases.map((c) => ({ id: c.id, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
       election: e ? { cands: e.cands, visi: e.visi, reason: e.reason, done: e.done, votesIn: Object.keys(e.votes).length, voters: electionVoters(G).length } : null,
@@ -768,8 +836,14 @@
     return v;
   }
 
+  // Ringkasan untuk daftar room publik (tanpa rahasia)
+  function summary(G, now) {
+    const h = P(G, G.creatorId);
+    return { code: G.code, pub: !!(G.settings && G.settings.public), phase: G.phase, n: G.players.length, humans: G.players.filter((p) => !p.bot).length,
+      host: h ? h.name : '', cdAt: G.lobby ? G.lobby.cdAt : 0, at: now || Date.now() };
+  }
   const Engine = {
-    MAX_DAYS,
+    MAX_DAYS, summary, filt,
     create, join, act, tick, setConnected, publicView, privateView, distCounts,
     DATA: { PERSONAS, ROLES, WIN_TEXT, DIST, DIST_KEYS, NINE_PLUS, CARDS, DARK_ROLES, MIN_PLAYERS, MAX_PLAYERS },
   };
