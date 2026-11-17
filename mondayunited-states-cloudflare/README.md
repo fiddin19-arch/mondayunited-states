@@ -3,16 +3,21 @@
 Game *social deduction* satir birokrasi Indonesia untuk 6–12 pemain, langsung dari browser HP atau laptop.
 
 Berjalan di **Cloudflare Workers + Durable Objects** (paket gratis):
-- Setiap room adalah satu Durable Object yang memegang semua data rahasia. **Tidak ada pemain yang menjadi host**, dan semua pemain setara.
-- Pemain cukup membuka link dan memasukkan 4 digit kode room, tanpa akun.
-- Reload halaman atau sinyal putus? Pemain otomatis tersambung lagi.
-- Kalau semua pemain keluar, permainan dijeda dan bisa dilanjutkan.
+- Setiap room adalah satu Durable Object yang memegang semua data rahasia. Mesin game jalan di server, jadi **game tetap berjalan walau pembuat room keluar**.
+- **Main Cepat / Cari Room**: room publik tampil di daftar (Durable Object `Directory`). Room publik mulai otomatis 60 detik setelah 6 orang; pemegang palu bisa menambah 60 detik (maks. 5x) atau mulai lebih cepat.
+- **Room privat**: hanya lewat 4 digit kode, mulai manual. Pemegang palu bisa mengeluarkan pemain di lobi (yang dikeluarkan tidak bisa masuk lagi ke room itu).
+- Pemegang palu keluar/putus >15 detik → palu pindah ke pemain yang paling lama hadir.
+- Pemain putus di tengah game: bisa masuk lagi lewat link yang sama; kalau >2 menit, autopilot mengambil alih (label AFK) sampai ia kembali.
+- Room publik sepi 3 menit → pemegang palu ditawari mengisi kursi kosong dengan bot. Latihan offline melawan bot tetap ada.
+- Filter kata kasar di chat & nama, dan tombol bisukan pemain (hanya di HP sendiri).
+
+> **Update dari versi sebelumnya:** ganti `src/worker.js`, `src/engine.js`, `public/index.html`, **dan `wrangler.jsonc`** (ada Durable Object baru `Directory` dengan migrasi `v2`). Tanpa `wrangler.jsonc` baru, daftar room selalu kosong tapi game tetap jalan.
 
 ```
 ├── wrangler.jsonc      ← konfigurasi Cloudflare (nama Worker, Durable Object, folder halaman)
 ├── package.json
 ├── src/
-│   ├── worker.js       ← Worker + Durable Object "Room"
+│   ├── worker.js       ← Worker + Durable Object "Room" & "Directory" (daftar room publik)
 │   └── engine.js       ← mesin aturan permainan
 └── public/
     └── index.html      ← aplikasi pemain (semua tampilan dalam satu file)
@@ -129,6 +134,7 @@ Kalau batas harian habis, room baru gagal dibuat sampai reset. Untuk main bareng
 - Pemakzulan pertama hanya peringatan (tidak boleh ikut pemilu kilat yang sama). Pemakzulan **kedua** membuat Presiden **cacat politik permanen**. Jika tidak ada kandidat sama sekali, sistem mengundi **Plt. Presiden** untuk 1 putaran tanpa Hak Veto. Jika semua Koruptor dipenjara, tidak ada lagi fitnah: sisa Faksi Gelap hanya bisa mengulur waktu.
 - **Reformis** (KPK, Jurnalis, Pengamat Politik, Guru Besar, Warga Sipil) menang jika semua anggota Faksi Gelap dipenjara.
 - Presiden dipilih dari 2 kandidat acak, menjabat 2 putaran, imun dari fitnah dan rekrut, dan memutuskan apakah tuduhan sah.
-- KPK bisa **Sadap** (tahu faksi) atau **OTT** (target Faksi Gelap langsung jadi Tersangka).
+- KPK bisa **Sadap** (tahu faksi) atau **OTT** (target jadi Tersangka, siapa pun dia; berkasnya tampil sama dengan tuduhan Koruptor).
+- Koruptor menulis **Berita Jelek** (fitnah) atau **Berita Bagus** (pencitraan: target kebal OTT malam itu). Jurnalis membatalkan berita Koruptor apa pun pada target yang ia cek.
 - Jika KPK dipenjara (atau kehilangan role karena dibebaskan), satu Warga Sipil bebas diam-diam diangkat menjadi **KPK pengganti**.
 - Halaman depan juga punya mode **latihan solo** melawan bot.

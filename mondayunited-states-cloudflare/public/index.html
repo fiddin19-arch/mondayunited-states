@@ -5,6 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mondayunited States</title>
 <meta name="description" content="Game social deduction satir birokrasi. 6–12 pemain.">
+<!--OG-->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Mondayunited States">
+<meta property="og:title" content="Mondayunited States — Siapa jujur, siapa korup?">
+<meta property="og:description" content="Game intrik politik satir untuk 6–12 pemain. Pemilu, pemakzulan, OTT, buzzer, dan sidang rakyat. Main bareng teman lewat HP.">
+<meta property="og:url" content="__ORIGIN__/">
+<meta property="og:image" content="__ORIGIN__/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Mondayunited States — game intrik politik satir">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Mondayunited States — Siapa jujur, siapa korup?">
+<meta name="twitter:description" content="Game intrik politik satir untuk 6–12 pemain. Main bareng teman lewat HP.">
+<meta name="twitter:image" content="__ORIGIN__/og.png">
+<meta name="theme-color" content="#09090b">
+<!--/OG-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -62,7 +79,7 @@ tailwind.config = {
 <div id="app"></div>
 <div id="overlay"></div>
 <script>
-/* Mondayunited States — mesin permainan (aturan v1.2)
+/* Mondayunited States — mesin permainan (aturan v1.9)
  * Murni JavaScript, tanpa DOM. Dipakai oleh server Node (jalur B) dan oleh
  * perangkat pembuat room di versi link Claude (jalur A).
  * State G sepenuhnya JSON-serializable sehingga bisa disimpan & dilanjutkan.
@@ -88,11 +105,11 @@ tailwind.config = {
   const BOT_NAMES = ['Budi', 'Sri', 'Joko', 'Ani', 'Rudi', 'Mega', 'Tono', 'Ucup', 'Wati', 'Dedi', 'Lina', 'Asep'];
   const DARK_ROLES = ['KORUPTOR', 'BROKER', 'BUZZER'];
   const ROLES = {
-    KORUPTOR: { icon: '🐀', title: 'Koruptor', fac: 'GELAP', desc: 'Anda tidak korupsi, Anda <i>mengoptimalkan anggaran</i>. Setiap malam, fitnah satu warga dengan skandal fiktif.', action: 'Pilih Target Kasus Fiktif' },
+    KORUPTOR: { icon: '🐀', title: 'Koruptor', fac: 'GELAP', desc: 'Anda tidak korupsi, Anda <i>mengoptimalkan anggaran</i>. Setiap malam tulis satu berita fiktif: BERITA JELEK (fitnah satu warga jadi Tersangka) atau BERITA BAGUS (pencitraan yang menggagalkan OTT KPK pada satu orang, termasuk sekutu Anda).', action: 'Tulis Berita Fiktif' },
     BROKER: { icon: '🤝', title: 'Broker', fac: 'GELAP', desc: 'Penghubung antara yang butuh dan yang punya. Komisi 10% sudah termasuk pajak. Sekali per game, rekrut satu Warga Sipil menjadi Buzzer.', action: 'Gunakan Hak Rekrut Broker (1x)' },
     BUZZER: { icon: '📣', title: 'Buzzer', fac: 'GELAP', desc: 'Satu akun, seribu suara. Bayarannya nasi kotak. Setiap malam, balikkan suara satu pemain untuk esok hari.', action: 'Balikkan Suara Target' },
-    KPK: { icon: '🕵️', title: 'Penyidik KPK', fac: 'REFORMIS', desc: 'Gaji UMR, tanggung jawab negara. Setiap malam pilih satu: SADAP (Anda tahu faksi target) atau OTT (jika target Faksi Gelap, ia jadi Tersangka besok; jika bersih, berita mengumumkan OTT salah sasaran).', action: 'Sadap atau OTT' },
-    JURNALIS: { icon: '🎙️', title: 'Jurnalis Investigasi', fac: 'REFORMIS', desc: 'Deadline jam 5, klarifikasi jam 5 lewat 1. Setiap malam, cek fakta satu pemain: fitnah ke dia jadi HOAKS. Kalau dijebloskan Presiden, Anda dapat Hak Headline.', action: 'Cek Fakta Satu Pemain' },
+    KPK: { icon: '🕵️', title: 'Penyidik KPK', fac: 'REFORMIS', desc: 'Gaji UMR, tanggung jawab negara. Setiap malam pilih satu: SADAP (Anda tahu faksi target) atau OTT (target jadi Tersangka besok, siapa pun dia). Berkas OTT tampil sama persis dengan berita tuduhan Koruptor, jadi sadap dulu sebelum OTT supaya tidak salah sasaran.', action: 'Sadap atau OTT' },
+    JURNALIS: { icon: '🎙️', title: 'Jurnalis Investigasi', fac: 'REFORMIS', desc: 'Deadline jam 5, klarifikasi jam 5 lewat 1. Setiap malam, cek fakta satu pemain: berita Koruptor tentang dia (jelek maupun bagus) dibatalkan. Kalau yang dibatalkan berita bagus, hanya Anda yang tahu bahwa ia dapat pencitraan Koruptor. Kalau dijebloskan Presiden, Anda dapat Hak Headline.', action: 'Cek Fakta Satu Pemain' },
     PENGAMAT: { icon: '📊', title: 'Pengamat Politik', fac: 'REFORMIS', desc: 'Analisis saya selalu tepat, setelah kejadian. Setiap malam, amati satu pemain dan ketahui siapa yang ia datangi.', action: 'Amati Pergerakan Satu Pemain' },
     GURU_BESAR: { icon: '🧑‍🏫', title: 'Guru Besar', fac: 'REFORMIS', desc: 'Menurut kajian saya (halaman 3 dari 400)… Sekali per game saat Sidang, serahkan Kesaksian Ahli: Presiden tahu faksi asli Tersangka.', action: 'Kesaksian Ahli ke Presiden (1x, siang)' },
     WARGA: { icon: '🧍', title: 'Warga Sipil', fac: 'REFORMIS', desc: 'Tidak punya kuasa, hanya punya kuota. Senjata Anda: debat di Sidang, coblosan, dan petisi.', action: null },
@@ -145,6 +162,9 @@ tailwind.config = {
 
   const FIXED_T = { reveal: 60, election: 45, morning: 9, decision: 30 };
   const MAX_DAYS = 20;
+  // Aturan yang bisa diubah per room (untuk penyeimbangan). Default = aturan standar.
+  const DEFAULT_RULES = { maxDays: 20, fitnahCooldown: false, impeachFrac: 0.5, darkTerms: 3, grasi: false, kpkDual: false };
+  const R = (G, k) => (G.settings && G.settings.rules && G.settings.rules[k] != null ? G.settings.rules[k] : DEFAULT_RULES[k]);
   const MIN_PLAYERS = 6, MAX_PLAYERS = 12;
 
   // --------------------------------------------------------------- HELPERS
@@ -158,7 +178,13 @@ tailwind.config = {
   const persona = (id) => PERSONAS.find((x) => x.id === id) || PERSONAS[0];
   const pad2 = (n) => String(n).padStart(2, '0');
   const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f​-‏‪-‮⁦-⁩]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-  const active = (p) => p.bot || p.connected; // pemain yang ditunggu
+  const ai = (p) => !!(p.bot || p.auto);           // dikendalikan mesin (bot atau autopilot AFK)
+  const active = (p) => ai(p) || p.connected;      // pemain yang ditunggu
+  const LOBBY_CD = 60000, LOBBY_EXT_MAX = 5, BOT_OFFER_MS = 180000, GHOST_MS = 90000, HOST_GRACE_MS = 15000, AFK_MS = 120000;
+  // Filter kata kasar sederhana (huruf boleh diulang: "anjiiing")
+  const BAD = ['anjing', 'anjeng', 'anjir', 'bangsat', 'bajingan', 'babi', 'kontol', 'memek', 'ngentot', 'entot', 'jancok', 'jancuk', 'cok', 'asu', 'goblok', 'goblog', 'tolol', 'kampret', 'keparat', 'pepek', 'peler', 'titit', 'puki', 'lonte', 'pelacur', 'perek', 'tai', 'taik', 'bego', 'idiot', 'fuck', 'shit', 'bitch'];
+  const BAD_RE = new RegExp('(^|[^a-z])(' + BAD.map((w) => w.split('').map((c) => c + '+').join('')).join('|') + ')(?=$|[^a-z])', 'gi');
+  const filt = (t) => String(t).replace(BAD_RE, (m, pre, w) => pre + w[0] + '*'.repeat(Math.max(2, w.length - 1)));
 
   const openCases = (G) => G.cases.filter((c) => !c.vetoed && !c.closed && P(G, c.suspect) && !P(G, c.suspect).jailed);
   const caseSuspects = (G) => openCases(G).map((c) => c.suspect);
@@ -174,11 +200,12 @@ tailwind.config = {
   function later(G, step, ms, now, arg) { G.pending = { at: now + ms, step, arg: arg == null ? null : arg }; }
 
   // ---------------------------------------------------------------- CREATE
-  function create(code, creatorId, now) {
-    now = now || Date.now();
+  function create(code, creatorId, now, opts) {
+    now = now || Date.now(); opts = opts || {};
     return {
       v: 3, code: String(code), creatorId, phase: 'LOBBY', phaseStart: now, phaseDur: 0, endsAt: 0, pending: null, rev: 1, seq: 0,
-      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5 },
+      settings: { auto: true, dist: DIST[8].slice(), timers: { night: 45, sidang: 180 }, scandalTarget: 5, rules: {}, public: !!opts.public },
+      lobby: { cdAt: 0, ext: 0, openedAt: now }, banned: {},
       players: [], day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true,
       cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null,
       nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null,
@@ -191,10 +218,11 @@ tailwind.config = {
   function join(G, pid, info, now) {
     now = now || Date.now();
     const ex = P(G, pid);
-    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, clean(info.name, 14) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (ex) { ex.connected = true; if (G.phase === 'LOBBY' && info) { if (info.name) ex.name = uniqueName(G, filt(clean(info.name, 14)) || ex.name, pid); if (info.persona) setPersona(G, ex, info.persona); } bump(G, now); return { ok: true }; }
+    if (G.banned && G.banned[pid]) return { err: 'Anda sudah dikeluarkan dari room ini oleh pemegang palu.' };
     if (G.phase !== 'LOBBY') return { err: 'Sidang sudah berjalan. Tunggu ronde berikutnya.' };
     if (G.players.length >= MAX_PLAYERS) return { err: 'Ruang sidang penuh (12 kursi).' };
-    const p = blankPlayer(pid, uniqueName(G, clean(info && info.name, 14) || 'Warga', pid), null, false);
+    const p = blankPlayer(pid, uniqueName(G, filt(clean(info && info.name, 14)) || 'Warga', pid), null, false);
     G.players.push(p); setPersona(G, p, info && info.persona);
     if (!G.creatorId || !P(G, G.creatorId)) G.creatorId = pid;
     sys(G, `📝 ${p.name} hadir di ruang sidang.`);
@@ -228,7 +256,8 @@ tailwind.config = {
     if (!dc.valid) return { err: 'Komposisi role tidak valid untuk jumlah pemain ini.' };
     const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
     shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
-    Object.assign(G, { day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    Object.assign(G, { sadapNight: {}, lastBadDay: -9, grasiUsed: false, day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
+    G.lobby = Object.assign(G.lobby || {}, { cdAt: 0 });
     G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
     setPhase(G, 'REVEAL', FIXED_T.reveal, now);
     return { ok: true };
@@ -269,7 +298,7 @@ tailwind.config = {
   }
   function install(G, win, how, now, coin, plt) {
     const p = P(G, win);
-    G.presidentId = win; G.plt = !!plt; G.term = { n: G.term.n + 1, round: plt ? 2 : 1 }; G.vetoAvailable = !plt; stat(G, win, 'pres');
+    G.presidentId = win; G.plt = !!plt; G.grasiUsed = false; G.term = { n: G.term.n + 1, round: plt ? 2 : 1 }; G.vetoAvailable = !plt; stat(G, win, 'pres');
     if (p.role === 'KORUPTOR' && !plt) G.darkTerms++;
     sys(G, `👑 ${p.name} dilantik sebagai ${plt ? 'Plt. Presiden' : 'Presiden'} (${how}).`);
     G.history.push(plt ? `Kursi kosong: ${p.name} jadi Plt. Presiden` : `Pemilu: ${p.name} jadi Presiden`);
@@ -281,7 +310,7 @@ tailwind.config = {
   // ----------------------------------------------------------------- NIGHT
   function dealHand(G) { if (G.deck.length < 5) G.deck = shuffle(CARDS.map((c) => c.id)); return G.deck.slice(0, 5); }
   function startNight(G, now) {
-    if (G.day >= MAX_DAYS) { G.winner = 'GELAP'; G.reason = `Hari ke-${MAX_DAYS} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
+    if (G.day >= R(G, 'maxDays')) { G.winner = 'GELAP'; G.reason = `Hari ke-${R(G, 'maxDays')} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
     G.day++; G.cases = [];
     appointPltKpk(G); G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
     G.hand = dealHand(G); G.korChoice = null; G.nightActs = {}; G.decided = false; G.appeals = [];
@@ -304,36 +333,43 @@ tailwind.config = {
     if (opts.notPres && t.id === G.presidentId) return null;
     return t;
   }
+  // Berita Koruptor: JELEK (fitnah, target non-Dark) atau BAGUS (pencitraan, target siapa pun kecuali Presiden)
+  function setKorChoice(G, me, a) {
+    const good = !!a.good;
+    if (!good && R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1) return { err: 'Redaksi sedang diawasi: malam ini hanya boleh berita bagus.' };
+    const t = validTarget(G, me, a.target, good ? { self: true, notPres: true } : { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
+    if (!good && !G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
+    G.korChoice = { target: t.id, card: good ? null : a.card, by: me.id, good };
+    return null;
+  }
   function nightAction(G, me, a, now) {
     if (G.phase !== 'NIGHT' || G.pending) return { err: 'Bukan waktunya.' };
     if (me.jailed) return { err: 'Napi tidak beraksi malam hari.' };
     const r = me.role, k = a.kind;
     // Plt. Koruptor: Broker/Buzzer memilih kasus fiktif tanpa menghabiskan aksi role-nya
     if (k === 'SCANDAL' && r !== 'KORUPTOR') {
-      if (!scandalActors(G).some((p) => p.id === me.id)) return { err: 'Hanya Koruptor yang bisa memfitnah.' };
-      const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
-      if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
-      G.korChoice = { target: t.id, card: a.card, by: me.id }; return { ok: true };
+      if (!scandalActors(G).some((p) => p.id === me.id)) return { err: 'Hanya Koruptor yang bisa menulis berita.' };
+      const e = setKorChoice(G, me, a); if (e) return e; return { ok: true };
     }
     if (G.nightActs[me.id] && me.role !== 'KORUPTOR') return { err: 'Aksi sudah terkirim.' };
     if (k === 'DUMMY') { /* lewati malam: semua role boleh */ }
     else if (r === 'KORUPTOR') {
-      if (k === 'SCANDAL') {
-        const t = validTarget(G, me, a.target, { notDark: true, notPres: true }); if (!t) return { err: 'Target tidak valid.' };
-        if (!G.hand.includes(a.card)) return { err: 'Kartu tidak ada di tangan.' };
-        G.korChoice = { target: t.id, card: a.card, by: me.id };
-      } else if (k !== 'AGREE' || !G.korChoice) return { err: 'Pilih target dan kartu.' };
+      if (k === 'SCANDAL') { const e = setKorChoice(G, me, a); if (e) return e; }
+      else if (k !== 'AGREE' || !G.korChoice) return { err: 'Pilih target dan kartu.' };
     } else if (r === 'BROKER') {
       if (k === 'RECRUIT') { if (G.recruitUsed) return { err: 'Hak rekrut sudah terpakai.' }; if (!validTarget(G, me, a.target, { notDark: true, notPres: true })) return { err: 'Target tidak valid.' }; }
       else if (k !== 'PASS') return { err: 'Aksi tidak valid.' };
     } else if (r === 'BUZZER') { if (k !== 'FLIP' || !validTarget(G, me, a.target, {})) return { err: 'Target tidak valid.' }; }
     else if (r === 'KPK') {
       if (k === 'OTT') {
-        if (!validTarget(G, me, a.target, { notPres: true })) return { err: 'Target tidak valid (Presiden imun).' };
+        const t = validTarget(G, me, a.target, { notPres: true }); if (!t) return { err: 'Target tidak valid (Presiden imun).' };
+        if (!(G.investigations[me.id] || []).some((i) => i.id === t.id)) note(G, me.id, `⚠️ OTT ke ${t.name} tanpa sadap lebih dulu: berkasnya tetap terbit walau ia bersih.`, 'zinc');
       } else {
         const t = k === 'INVESTIGATE' && validTarget(G, me, a.target, {}); if (!t) return { err: 'Target tidak valid.' };
         const fac = isDark(t) ? 'GELAP' : 'REFORMIS';
         (G.investigations[me.id] = G.investigations[me.id] || []).push({ id: t.id, fac, night: G.day });
+        // Aturan kpkDual: sadap tidak menghabiskan malam. KPK masih bisa OTT (atau selesai) setelah melihat hasil sadap.
+        if (R(G, 'kpkDual') && (G.sadapNight = G.sadapNight || {})[me.id] !== G.day) { G.sadapNight[me.id] = G.day; return { ok: true, sadap: true }; }
       }
     } else if (r === 'JURNALIS') {
       if (k !== 'FACTCHECK' || !validTarget(G, me, a.target, { self: true }) || a.target === G.lastProtected[me.id]) return { err: 'Target tidak valid.' };
@@ -346,6 +382,10 @@ tailwind.config = {
   function maybeEndNight(G, now) {
     if (G.pending) return;
     if (free(G).filter(active).every((p) => G.nightActs[p.id])) later(G, 'resolveNight', 1800, now);
+  }
+  function mkCase(G, src, sid, cid) {
+    const n = G.cases.length + 1, c = { id: 'C' + n, src, suspect: sid, card: cid, no: `KS/${pad2(G.day)}/${G.code}/${n}`, vetoed: false };
+    G.cases.push(c); P(G, sid).suspect = true; return c;
   }
   function resolveNight(G, now) {
     const acts = G.nightActs, visits = {};
@@ -366,18 +406,18 @@ tailwind.config = {
     // 2. Jurnalis cek fakta
     const protectedSet = new Set();
     for (const j of byRole('JURNALIS')) { const a = acts[j.id]; if (a && a.kind === 'FACTCHECK') { protectedSet.add(a.target); visits[j.id] = a.target; G.lastProtected[j.id] = a.target; } else delete G.lastProtected[j.id]; }
-    // 3. Koruptor
-    let tgt = null, cid = null;
+    // 3. Koruptor: berita JELEK (fitnah) atau berita BAGUS (pencitraan)
+    let tgt = null, cid = null, good = false;
     const kor = scandalActors(G);
-    if (!G.korChoice && kor.length && kor.every((k) => k.bot)) botScandal(G, rnd(kor));
-    if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; visits[G.korChoice.by] = tgt; } }
+    if (!G.korChoice && kor.length && kor.every(ai)) botScandal(G, rnd(kor));
+    if (G.korChoice) { const t = P(G, G.korChoice.target); if (t && !t.jailed && t.id !== G.presidentId) { tgt = t.id; cid = G.korChoice.card; good = !!G.korChoice.good; visits[G.korChoice.by] = tgt; } }
     if (cid) G.deck = G.deck.filter((x) => x !== cid);
     // 4. Buzzer
     G.flipTarget = null;
     for (const bz of byRole('BUZZER')) { const a = acts[bz.id]; if (a && a.kind === 'FLIP') { G.flipTarget = a.target; visits[bz.id] = a.target; } }
     // 5. KPK
-    const kpkCases = [];
-    for (const k of byRole('KPK')) { const a = acts[k.id]; if (a && (a.kind === 'INVESTIGATE' || a.kind === 'OTT')) visits[k.id] = a.target; if (a && a.kind === 'OTT') kpkCases.push(a.target); }
+    const kpkOps = [];
+    for (const k of byRole('KPK')) { const a = acts[k.id]; if (a && (a.kind === 'INVESTIGATE' || a.kind === 'OTT')) visits[k.id] = a.target; if (a && a.kind === 'OTT') kpkOps.push({ kpk: k.id, target: a.target }); }
     // 6. Pengamat
     for (const pg of byRole('PENGAMAT')) { const a = acts[pg.id]; if (a && a.kind === 'OBSERVE') visits[pg.id] = a.target; }
     for (const pg of byRole('PENGAMAT')) {
@@ -386,25 +426,47 @@ tailwind.config = {
       (G.observations[pg.id] = G.observations[pg.id] || []).push({ id: a.target, visited: v == null ? null : v, night: G.day });
       note(G, pg.id, `📊 Pengamatan: ${t.name} ${v != null ? 'semalam mendatangi ' + P(G, v).name : 'tidak ke mana-mana semalam'}.`, 'reform');
     }
-    // berita
-    if (tgt == null) G.news = { kind: 'QUIET', head: 'Malam sepi, tikus sedang cuti bersama', low: 'Tidak ada kasus baru semalam.' };
-    else if (protectedSet.has(tgt)) G.news = { kind: 'BLOCKED', head: `HOAKS! Kasus ${card(cid).title} terbantahkan cek fakta`, low: `${P(G, tgt).name} lolos dari fitnah. Tim cek fakta bergerak semalam.` };
-    else {
-      const t = P(G, tgt); G.scandal++; t.suspect = true; stat(G, tgt, 'fitnah');
-      G.cases.push({ id: 'F', kind: 'FITNAH', suspect: tgt, card: cid, no: `KF/${pad2(G.day)}/${G.code}`, vetoed: false });
-      G.news = { kind: 'SUCCESS', head: card(cid).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA` };
+    // berita: semua berkas (fitnah maupun OTT) tampil dengan bentuk yang sama; urutannya diacak
+    const items = [], log = []; let shield = null;
+    const darkTeam = () => G.players.filter((p) => isDark(p));
+    if (tgt != null) {
+      const t = P(G, tgt), blocked = protectedSet.has(tgt);
+      if (!good) G.lastBadDay = G.day;
+      if (good) {
+        if (blocked) {
+          byRole('JURNALIS').forEach((j) => { const a = acts[j.id]; if (a && a.kind === 'FACTCHECK' && a.target === tgt) note(G, j.id, `🎙️ Cek fakta Anda ke ${t.name} membongkar kampanye PENCITRAAN dari Koruptor untuk dia. Kampanye dibatalkan.`, 'reform'); });
+          darkTeam().forEach((p) => note(G, p.id, `🔎 Pencitraan untuk ${t.name} dibongkar cek fakta Jurnalis.`, 'korup'));
+          log.push(`pencitraan ${t.name} dibongkar Jurnalis`);
+        } else { shield = tgt; log.push(`pencitraan untuk ${t.name}`); }
+      } else if (blocked) {
+        items.push({ head: `HOAKS! Kasus ${card(cid).title} terbantahkan cek fakta`, low: `${t.name} lolos dari fitnah. Tim cek fakta bergerak semalam.`, hoax: true });
+        log.push('fitnah digagalkan cek fakta');
+      } else {
+        G.scandal++; stat(G, tgt, 'fitnah');
+        const c = mkCase(G, 'FITNAH', tgt, cid);
+        items.push({ head: card(cid).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA`, no: c.no });
+        log.push(`${t.name} difitnah (${card(cid).title})`);
+      }
     }
-    for (const sid of kpkCases) {
-      const t = P(G, sid); if (!t || t.jailed) continue;
-      if (!isDark(t)) { G.news.kpk = `OTT KPK salah sasaran: ${persona(t.persona).e} ${t.name} dinyatakan BERSIH.`; G.history.push(`Malam ${G.day}: OTT gagal, ${t.name} bersih`); continue; }
-      if (G.cases.some((c) => c.suspect === sid)) continue;
-      t.suspect = true; G.cases.push({ id: 'K' + sid, kind: 'KPK', suspect: sid, card: null, no: `OTT/${pad2(G.day)}/${G.code}`, vetoed: false });
-      G.news.kpk = `OTT KPK! ${persona(t.persona).e} ${t.name} tertangkap tangan dan ditetapkan TERSANGKA.`;
-      G.history.push(`Malam ${G.day}: OTT KPK, ${t.name} tersangka`);
+    for (const op of kpkOps) {
+      const t = P(G, op.target); if (!t || t.jailed) continue;
+      if (shield === t.id) {
+        note(G, op.kpk, `🚨 OTT ke ${t.name} GAGAL: ia dilindungi kampanye pencitraan Koruptor.`, 'reform');
+        darkTeam().forEach((p) => note(G, p.id, `🛡️ Pencitraan untuk ${t.name} menggagalkan OTT KPK semalam!`, 'korup'));
+        log.push(`OTT atas ${t.name} gagal (pencitraan)`); continue;
+      }
+      if (G.cases.some((c) => c.suspect === t.id)) { note(G, op.kpk, `🚨 OTT ke ${t.name}: berkas atas dirinya sudah terbit semalam (digabung).`, 'reform'); continue; }
+      const c = mkCase(G, 'KPK', t.id, rnd(CARDS.filter((x) => x.id !== cid)).id);
+      items.push({ head: card(c.card).h.replace('{t}', `${persona(t.persona).n} ${t.name}`), low: `${persona(t.persona).e} ${t.name} kini berstatus TERSANGKA`, no: c.no });
+      note(G, op.kpk, `🚨 OTT ke ${t.name} berhasil: berkas ${c.no} terbit.`, 'reform');
+      log.push(`OTT KPK atas ${t.name}`);
     }
+    const mix = shuffle(items);
+    if (!mix.length) G.news = { kind: 'QUIET', head: 'Malam sepi, tikus sedang cuti bersama', low: 'Tidak ada kasus baru semalam.', more: [] };
+    else G.news = { kind: mix.some((x) => !x.hoax) ? 'SUCCESS' : 'BLOCKED', head: mix[0].head, low: mix[0].low, more: mix.slice(1).map((x) => ({ head: x.head, low: x.low })) };
     if (G.pendingColumn) { G.news.column = G.pendingColumn; G.pendingColumn = null; }
     G.news.id = ++G.seq;
-    G.history.push(`Malam ${G.day}: ${G.news.kind === 'SUCCESS' ? `${P(G, tgt).name} difitnah (${card(cid).title})` : G.news.kind === 'BLOCKED' ? 'fitnah digagalkan cek fakta' : 'sepi'}`);
+    G.history.push(`Malam ${G.day}: ${log.length ? log.join('; ') : 'sepi'}`);
     if (checkWin(G, now)) return;
     setPhase(G, 'MORNING', FIXED_T.morning, now);
   }
@@ -418,7 +480,7 @@ tailwind.config = {
   function impeachNumbers(G) {
     const pool = free(G).filter((p) => p.id !== G.presidentId);
     let eff = 0; Object.keys(G.sigs).forEach((id) => { const p = P(G, id); if (!p || p.jailed || p.id === G.presidentId) return; eff += id === G.flipTarget ? -1 : 1; });
-    eff = Math.max(0, eff); const needed = Math.max(1, Math.ceil(pool.length / 2));
+    eff = Math.max(0, eff); const needed = Math.max(1, Math.ceil(pool.length * R(G, 'impeachFrac')));
     return { eff, needed, pct: pool.length ? Math.min(100, Math.round((eff / pool.length) * 100)) : 0 };
   }
   function checkImpeach(G, now) {
@@ -447,11 +509,19 @@ tailwind.config = {
     const c = openCases(G).find((x) => x.id === caseId) || (caseId == null ? openCases(G)[0] : null);
     if (!c || !G.vetoAvailable || G.decided) return { err: 'Veto tidak bisa dipakai sekarang.' };
     c.vetoed = true; G.vetoAvailable = false; const s = P(G, c.suspect); if (s) s.suspect = false;
-    const fit = c.kind === 'FITNAH'; if (fit) G.scandal = Math.max(0, G.scandal - 1);
-    sys(G, `✨ Presiden ${pres(G).name} menggunakan HAK VETO. Kasus ${c.no} dibatalkan${fit ? ', Skandal −1' : ''}.`);
+    if (c.src === 'FITNAH') G.scandal = Math.max(0, G.scandal - 1);
+    sys(G, `✨ Presiden ${pres(G).name} menggunakan HAK VETO. Kasus ${c.no} dibatalkan.`);
     G.history.push(`Hari ${G.day}: Veto atas ${c.no}`);
-    fx(G, 'veto', '✨ VETO!', `Kasus ${c.no} dibatalkan.${fit ? ' Skandal −1.' : ''}`, 1800, now);
+    fx(G, 'veto', '✨ VETO!', `Kasus ${c.no} dibatalkan.`, 1800, now);
     return { ok: true };
+  }
+  // Bebaskan napi: semua jabatan lama dicabut, jadi Warga Sipil biasa (Reformis)
+  function freePrisoner(G, s) {
+    const wasDark = isDark(s);
+    s.jailed = false; s.role = 'WARGA'; s.recruited = false; s.headlineRight = false; s.exNapi = true;
+    note(G, s.id, '🔓 Anda bebas, tapi semua jabatan lama dicabut. Anda kini WARGA SIPIL biasa (Reformis). Cek kartu role Anda.', 'reform');
+    if (wasDark) G.players.filter((p) => isDark(p)).forEach((p) => note(G, p.id, `🚪 ${s.name} keluar dari sindikat setelah bebas. Ia kini Warga Sipil biasa.`, 'korup'));
+    return `${s.name} keluar dari Rutan Negara sebagai Warga Sipil biasa.`;
   }
   function applyDecision(G, kind, pid, now) {
     if (G.phase !== 'DECISION' || G.decided) return { err: 'Keputusan sudah diambil.' };
@@ -461,18 +531,14 @@ tailwind.config = {
       const c = openCases(G).find((x) => x.suspect === pid) || (pid == null ? openCases(G)[0] : null);
       if (!c) return { err: 'Tidak ada tersangka untuk dijebloskan.' };
       const s = P(G, c.suspect); s.jailed = true; s.jailedDay = G.day; clearSuspects(); if (s.role === 'KPK') G.kpkEverJailed = true;
-      title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${c.kind === 'KPK' ? 'penetapan KPK' : card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
+      title = 'DIJEBLOSKAN'; sub = `${s.name} dipenjara atas ${card(c.card).title}.`; G.history.push(`Hari ${G.day}: ${s.name} dipenjara`);
       if (s.role === 'JURNALIS') {
-        if (s.bot) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
+        if (ai(s)) G.pendingColumn = { by: s.id, text: rnd(COLUMN_LINES) };
         else { s.headlineRight = true; note(G, s.id, '📰 Anda mendapat Hak Headline. Tulis dari sel Anda di Rutan Negara.', 'istana'); }
       }
     } else if (kind === 'FREE') {
       const s = P(G, pid); if (!s || !s.jailed) return { err: 'Pilih napi yang valid.' };
-      const wasDark = isDark(s);
-      s.jailed = false; s.role = 'WARGA'; s.recruited = false; s.headlineRight = false; s.exNapi = true;
-      title = 'DIBEBASKAN'; sub = `${s.name} keluar dari Rutan Negara sebagai Warga Sipil biasa.`; clearSuspects();
-      note(G, s.id, '🔓 Anda bebas, tapi semua jabatan lama dicabut. Anda kini WARGA SIPIL biasa (Reformis). Cek kartu role Anda.', 'reform');
-      if (wasDark) G.players.filter((p) => isDark(p)).forEach((p) => note(G, p.id, `🚪 ${s.name} keluar dari sindikat setelah bebas. Ia kini Warga Sipil biasa.`, 'korup'));
+      title = 'DIBEBASKAN'; sub = freePrisoner(G, s); clearSuspects();
       G.history.push(`Hari ${G.day}: ${s.name} dibebaskan`);
     } else { title = 'STATUS QUO'; sub = 'Presiden memilih diam. Tuduhan dikesampingkan.'; clearSuspects(); }
     G.decided = true; G.endsAt = 0;
@@ -493,7 +559,7 @@ tailwind.config = {
     let w = null, r = '';
     if (G.players.filter(isDark).every((p) => p.jailed)) { w = 'REFORMIS'; r = 'Seluruh sindikat mendekam di Rutan Negara. Untuk sementara.'; }
     else if (G.players.filter((p) => !isDark(p)).every((p) => p.jailed)) { w = 'GELAP'; r = 'Semua Reformis sudah dipenjara. Yang tersisa di luar hanya yang “bisa diatur”.'; }
-    else if (G.darkTerms >= 3) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
+    else if (G.darkTerms >= R(G, 'darkTerms')) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
     if (!w) return false;
     G.winner = w; G.reason = r; G.pending = null; setPhase(G, 'END', 0, now); return true;
   }
@@ -512,7 +578,7 @@ tailwind.config = {
     switch (a.t) {
       // lobby
       case 'persona': if (ph !== 'LOBBY') return; setPersona(G, me, a.persona); return { ok: true };
-      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, clean(a.name, 14) || me.name, me.id); return { ok: true };
+      case 'rename': if (ph !== 'LOBBY') return; me.name = uniqueName(G, filt(clean(a.name, 14)) || me.name, me.id); return { ok: true };
       case 'settings': {
         if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room.' };
         const s = a.settings || {}; if (typeof s.auto === 'boolean') G.settings.auto = s.auto;
@@ -525,20 +591,37 @@ tailwind.config = {
       case 'kick': {
         if (ph !== 'LOBBY' || !isCreator || a.id === me.id) return { err: 'Tidak bisa.' };
         const i = G.players.findIndex((p) => p.id === a.id); if (i < 0) return { err: 'Tidak ada.' };
-        const [p] = G.players.splice(i, 1); if (!p.bot) sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); return { ok: true };
+        const [p] = G.players.splice(i, 1); if (!p.bot) { G.banned = G.banned || {}; G.banned[p.id] = true; sys(G, `🚪 ${p.name} dikeluarkan dari ruang sidang.`); } return { ok: true };
       }
       case 'leave': {
-        if (ph !== 'LOBBY') { me.connected = false; return { ok: true }; }
+        if (ph !== 'LOBBY') { me.connected = false; me.offAt = now; if (ph !== 'END') setAuto(G, me, true, now); else ensureHost(G, now, true); return { ok: true }; }
         G.players = G.players.filter((p) => p.id !== me.id); sys(G, `🚪 ${me.name} meninggalkan ruang sidang.`);
-        if (isCreator) { const h = G.players.find((p) => !p.bot); G.creatorId = h ? h.id : null; if (h) sys(G, `🔁 ${h.name} kini memegang palu sidang.`); }
+        if (isCreator) ensureHost(G, now, true);
         return { ok: true };
       }
-      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pembuat room yang bisa memulai.' }; return startGame(G, now);
+      case 'start': if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu yang bisa memulai.' }; return startGame(G, now);
+      case 'extend': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        if (!G.lobby.cdAt) return { err: 'Hitung mundur belum berjalan.' };
+        if (G.lobby.ext >= LOBBY_EXT_MAX) return { err: `Sudah ditambah ${LOBBY_EXT_MAX}x. Mulai saja, yuk.` };
+        G.lobby.ext++; G.lobby.cdAt += LOBBY_CD; sys(G, `⏳ ${me.name} menambah waktu tunggu 60 detik.`); return { ok: true };
+      }
+      case 'fillBots': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        let k = 0; while (G.players.length < MIN_PLAYERS) { if (addBot(G).err) break; k++; }
+        if (k) sys(G, `🤖 ${k} bot ikut mengisi kursi kosong.`); return { ok: true };
+      }
+      case 'visibility': {
+        if (ph !== 'LOBBY' || !isCreator) return { err: 'Hanya pemegang palu.' };
+        G.settings.public = !!a.public; if (!G.settings.public) G.lobby.cdAt = 0;
+        sys(G, G.settings.public ? '🌐 Room dibuka untuk umum.' : '🔒 Room dijadikan privat (hanya lewat kode).'); return { ok: true };
+      }
       case 'replay': {
         if (ph !== 'END' || !isCreator) return { err: 'Hanya pembuat room.' };
         G.players = G.players.filter((p) => p.bot || p.connected);
-        G.players.forEach((p) => Object.assign(p, { role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
+        G.players.forEach((p) => Object.assign(p, { auto: false, role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
         Object.assign(G, { winner: null, reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
+        G.lobby = { cdAt: 0, ext: 0, openedAt: now };
         G.chat = []; sys(G, '🔁 Ruang sidang dibuka lagi. Ronde baru!'); setPhase(G, 'LOBBY', 0, now); return { ok: true };
       }
       // reveal
@@ -561,13 +644,13 @@ tailwind.config = {
       case 'chat': case 'react': {
         if (!['LOBBY', 'ELECTION', 'SIDANG', 'DECISION', 'END'].includes(ph)) return { err: 'Chat dibuka saat siang.' };
         if (me.jailed) return { err: 'Napi hanya bisa mengirim surat.' };
-        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : clean(a.text, 200);
+        const text = a.t === 'react' ? (['🤔', '🙄', '🔥', '🧂', '😂', '👏'].includes(a.emoji) ? a.emoji : '') : filt(clean(a.text, 200));
         if (!text) return; if (now - me.lastChatAt < 1200) return { err: 'Pelan-pelan, 1 pesan per 1,2 detik.' };
         me.lastChatAt = now; say(G, me.id, text); return { ok: true };
       }
       case 'letter': {
         if (!['SIDANG', 'DECISION'].includes(ph) || !me.jailed || me.letterDay === G.day) return { err: 'Surat hari ini sudah terkirim.' };
-        const text = clean(a.text, 200); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
+        const text = filt(clean(a.text, 200)); if (!text) return; me.letterDay = G.day; say(G, me.id, text, { letter: true }); return { ok: true };
       }
       case 'sign': {
         if (!['SIDANG', 'DECISION'].includes(ph) || me.jailed || me.id === G.presidentId || G.decided || G.carryover || G.presidentId == null || G.pending) return { err: 'Petisi tidak bisa ditandatangani sekarang.' };
@@ -583,7 +666,7 @@ tailwind.config = {
       }
       case 'headline': {
         if (!me.jailed || !me.headlineRight) return { err: 'Tidak punya Hak Headline.' };
-        const text = clean(a.text, 90); if (!text) return { err: 'Headline kosong.' };
+        const text = filt(clean(a.text, 90)); if (!text) return { err: 'Headline kosong.' };
         me.headlineRight = false; G.pendingColumn = { by: me.id, text }; note(G, me.id, '📰 Headline Anda masuk antrean redaksi untuk pagi berikutnya.', 'istana'); return { ok: true };
       }
       case 'testify': {
@@ -592,6 +675,13 @@ tailwind.config = {
         G.expertUsed = true; G.expertReport = {}; oc.forEach((c) => { G.expertReport[c.suspect] = isDark(P(G, c.suspect)) ? 'GELAP' : 'REFORMIS'; });
         sys(G, '🧑‍🏫 Seorang Ahli menyerahkan kajian ke meja Presiden.'); note(G, G.presidentId, '🧑‍🏫 Kajian Ahli baru masuk ke meja Anda.', 'istana'); note(G, me.id, '🧑‍🏫 Kajian Anda sudah di meja Presiden.', 'reform');
         return { ok: true };
+      }
+      case 'grasi': {
+        if (!R(G, 'grasi')) return { err: 'Grasi tidak berlaku di ronde ini.' };
+        if (!['SIDANG', 'DECISION'].includes(ph) || me.id !== G.presidentId || G.decided || G.grasiUsed || G.pending) return { err: 'Grasi tidak bisa diberikan sekarang.' };
+        const s = P(G, a.prisoner); if (!s || !s.jailed) return { err: 'Pilih napi yang valid.' };
+        G.grasiUsed = true; const sub = freePrisoner(G, s); G.history.push(`Hari ${G.day}: ${s.name} diberi grasi`);
+        sys(G, `🕊️ GRASI Presiden ${me.name}: ${sub}`); fx(G, 'stamp', 'GRASI', sub, 2200, now); checkWin(G, now); return { ok: true };
       }
       case 'veto': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return doVeto(G, a.case, now);
       case 'decide': if (ph !== 'DECISION' || me.id !== G.presidentId) return { err: 'Hanya Presiden.' }; return applyDecision(G, a.kind === 'JAIL' || a.kind === 'FREE' ? a.kind : 'STATUS_QUO', a.kind === 'JAIL' ? a.suspect : a.prisoner, now);
@@ -603,6 +693,7 @@ tailwind.config = {
   function tick(G, now) {
     now = now || Date.now();
     const before = G.rev;
+    housekeeping(G, now);
     if (G.pending && now >= G.pending.at) {
       const { step, arg } = G.pending; G.pending = null;
       if (step === 'startElection') startElection(G, arg || 'awal', now);
@@ -631,7 +722,9 @@ tailwind.config = {
   }
   function setConnected(G, pid, on, now) {
     const p = P(G, pid); if (!p || p.bot || p.connected === on) return false;
-    p.connected = on; bump(G, now || Date.now());
+    now = now || Date.now();
+    p.connected = on; if (!on) p.offAt = now; bump(G, now);
+    if (on && p.auto) setAuto(G, p, false, now);
     // Pemain yang putus tidak boleh menahan fase
     if (!on) {
       if (G.phase === 'NIGHT') maybeEndNight(G, now);
@@ -641,11 +734,49 @@ tailwind.config = {
     return true;
   }
 
+  // ---------------------------------------------- ROOM ONLINE: host, lobi, AFK
+  function setAuto(G, p, on, now) {
+    if (!p || p.bot || !!p.auto === on) return;
+    p.auto = on;
+    if (on) { sys(G, `🤖 ${p.name} AFK — autopilot mengambil alih sampai ia kembali.`); if (!['LOBBY', 'END'].includes(G.phase)) G.botAt[p.id] = now + 1200; }
+    else { sys(G, `👋 ${p.name} kembali ke sidang.`); delete G.botAt[p.id]; }
+    bump(G, now);
+  }
+  // Palu sidang pindah ke manusia yang paling lama hadir dan masih tersambung.
+  function ensureHost(G, now, force) {
+    const h = P(G, G.creatorId);
+    const ok = h && !h.bot && (h.connected || (!force && now - (h.offAt || now) < HOST_GRACE_MS));
+    if (ok) return false;
+    const next = G.players.find((p) => !p.bot && p.connected && p.id !== G.creatorId);
+    if (!next) { if (!h) G.creatorId = null; return false; }
+    G.creatorId = next.id; sys(G, `🔁 ${next.name} kini memegang palu sidang.`); bump(G, now); return true;
+  }
+  function housekeeping(G, now) {
+    if (!G.lobby) G.lobby = { cdAt: 0, ext: 0, openedAt: now };
+    if (G.phase === 'LOBBY' || G.phase === 'END') ensureHost(G, now, false);
+    if (G.phase === 'LOBBY') {
+      // kursi hantu: pemain yang putus lama di lobi dikeluarkan supaya kursi bisa dipakai orang lain
+      const ghosts = G.players.filter((p) => !p.bot && !p.connected && now - (p.offAt || now) > GHOST_MS);
+      if (ghosts.length) {
+        G.players = G.players.filter((p) => !ghosts.includes(p));
+        ghosts.forEach((p) => sys(G, `🚪 ${p.name} terputus terlalu lama dan keluar dari ruang tunggu.`));
+        ensureHost(G, now, true); bump(G, now);
+      }
+      const L = G.lobby, valid = distCounts(G).valid && G.players.some((p) => !p.bot);
+      if (G.settings.public && valid && !L.cdAt) { L.cdAt = now + LOBBY_CD; L.ext = 0; sys(G, '⏱️ Kursi cukup! Sidang mulai otomatis dalam 60 detik.'); bump(G, now); }
+      else if (L.cdAt && (!valid || !G.settings.public)) { L.cdAt = 0; if (!valid) sys(G, '⏸️ Hitung mundur dibatalkan, pemain kurang.'); bump(G, now); }
+      if (L.cdAt && G.players.length >= MAX_PLAYERS && L.cdAt - now > 10000) { L.cdAt = now + 10000; sys(G, '🪑 Kursi penuh! Mulai dalam 10 detik.'); bump(G, now); }
+      if (L.cdAt && now >= L.cdAt) { L.cdAt = 0; if (startGame(G, now).ok) bump(G, now); }
+    } else if (G.phase !== 'END') {
+      for (const p of G.players) if (!p.bot && !p.auto && !p.connected && now - (p.offAt || now) > AFK_MS) setAuto(G, p, true, now);
+    }
+  }
+
   // ------------------------------------------------------------------ BOTS
-  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (p.bot) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
+  function scheduleBots(G, now, min, max) { G.botAt = {}; G.players.forEach((p) => { if (ai(p)) G.botAt[p.id] = now + min + Math.random() * (max - min); }); }
   function runBots(G, now) {
     for (const p of G.players) {
-      if (!p.bot) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
+      if (!ai(p)) continue; const at = G.botAt[p.id]; if (at == null || now < at || G.pending) continue;
       delete G.botAt[p.id];
       const next = botAct(G, p, now); if (next) G.botAt[p.id] = now + next;
       bump(G, now);
@@ -653,7 +784,10 @@ tailwind.config = {
   }
   function botScandal(G, p) {
     const pool = free(G).filter((x) => !isDark(x) && x.id !== G.presidentId); if (!pool.length) return;
-    G.korChoice = { target: rnd(pool).id, card: rnd(G.hand.length ? G.hand : CARDS.map((c) => c.id)), by: p.id };
+    const all = free(G).filter((x) => x.id !== G.presidentId);
+    const cool = R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1;
+    if (all.length && (cool || Math.random() < 0.2)) { G.korChoice = { target: rnd(all.filter(isDark).length ? all.filter(isDark) : all).id, card: null, by: p.id, good: true }; return; }
+    G.korChoice = { target: rnd(pool).id, card: rnd(G.hand.length ? G.hand : CARDS.map((c) => c.id)), by: p.id, good: false };
   }
   function botAct(G, p, now) {
     const ph = G.phase, r = (a, b) => a + Math.random() * (b - a);
@@ -677,7 +811,7 @@ tailwind.config = {
       const o = others(); let a = { kind: 'DUMMY' };
       switch (p.role) {
         case 'KORUPTOR': {
-          const humans = scandalActors(G).filter((x) => !x.bot);
+          const humans = scandalActors(G).filter((x) => !ai(x));
           if (G.korChoice) a = { kind: 'AGREE' };
           else if (!humans.length || now > G.endsAt - 6000) { botScandal(G, p); if (!G.korChoice) return 0; a = { kind: 'AGREE' }; }
           else return Math.max(1000, G.endsAt - 5000 - now);
@@ -697,7 +831,7 @@ tailwind.config = {
         case 'PENGAMAT': if (o.length) a = { kind: 'OBSERVE', target: rnd(o).id }; break;
       }
       // Plt. Koruptor bot
-      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every((x) => x.bot) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
+      if (p.role !== 'KORUPTOR' && isDark(p) && !G.korChoice && scandalActors(G).every(ai) && scandalActors(G).some((x) => x.id === p.id)) botScandal(G, p);
       const res = nightAction(G, p, a, now); if (res.err) nightAction(G, p, { kind: p.role === 'BROKER' ? 'PASS' : p.role === 'KPK' ? 'INVESTIGATE' : 'DUMMY', target: o.length ? rnd(o).id : null }, now);
       return 0;
     }
@@ -721,18 +855,16 @@ tailwind.config = {
     const rep = G.expertReport || {}, prisoners = G.players.filter((x) => x.jailed);
     let oc = openCases(G);
     if (oc.length && G.vetoAvailable && !isDark(p)) {
-      const fit = oc.find((c) => c.kind === 'FITNAH');
-      if (fit && (rep[fit.suspect] === 'REFORMIS' || Math.random() < 0.15)) { doVeto(G, fit.id, now); oc = openCases(G); }
+      const c = oc.find((x) => rep[x.suspect] === 'REFORMIS') || (Math.random() < 0.15 ? rnd(oc) : null);
+      if (c) { doVeto(G, c.id, now); oc = openCases(G); }
     }
     let kind = 'STATUS_QUO', pid = null;
     if (oc.length) {
-      const kpk = oc.find((c) => c.kind === 'KPK'), fit = oc.find((c) => c.kind === 'FITNAH');
       if (isDark(p)) { const t = oc.find((c) => !isDark(P(G, c.suspect))); if (t && Math.random() < 0.85) { kind = 'JAIL'; pid = t.suspect; } }
       else {
         const proven = oc.find((c) => rep[c.suspect] === 'GELAP');
         if (proven) { kind = 'JAIL'; pid = proven.suspect; }
-        else if (kpk && Math.random() < 0.8) { kind = 'JAIL'; pid = kpk.suspect; }
-        else if (fit && rep[fit.suspect] !== 'REFORMIS' && Math.random() < 0.5) { kind = 'JAIL'; pid = fit.suspect; }
+        else { const cand = oc.filter((c) => rep[c.suspect] !== 'REFORMIS'); if (cand.length && Math.random() < 0.6) { kind = 'JAIL'; pid = rnd(cand).suspect; } }
       }
     }
     if (kind === 'STATUS_QUO' && prisoners.length && Math.random() < 0.3) {
@@ -749,10 +881,11 @@ tailwind.config = {
     const end = G.phase === 'END', e = G.election;
     return {
       code: G.code, rev: G.rev, now, phase: G.phase, endsAt: G.endsAt, phaseDur: G.phaseDur, phaseStart: G.phaseStart, locked: !!G.pending,
-      day: G.day, creatorId: G.creatorId, settings: G.settings, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
-      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
+      day: G.day, creatorId: G.creatorId, settings: G.settings,
+      lobby: G.phase === 'LOBBY' && G.lobby ? { cdAt: G.lobby.cdAt, ext: G.lobby.ext, extMax: LOBBY_EXT_MAX, botOffer: !!G.settings.public && G.players.length < MIN_PLAYERS && now - G.lobby.openedAt >= BOT_OFFER_MS } : null, dist: G.phase === 'LOBBY' ? distCounts(G) : null,
+      players: G.players.map((p) => ({ id: p.id, name: p.name, persona: p.persona, bot: p.bot, connected: p.connected, afk: !!p.auto, jailed: p.jailed, jailedDay: p.jailedDay, suspect: p.suspect, impeached: p.impeached, impeachCount: p.impeachCount || 0, appealUsed: p.appealUsed, ready: p.ready, exNapi: !!p.exNapi, role: end ? p.role : undefined, recruited: end ? p.recruited : undefined })),
       scandal: G.scandal, presidentId: G.presidentId, term: G.term, vetoAvailable: G.vetoAvailable, plt: !!G.plt,
-      cases: G.cases.map((c) => ({ id: c.id, kind: c.kind, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
+      cases: G.cases.map((c) => ({ id: c.id, suspect: c.suspect, card: c.card, no: c.no, vetoed: c.vetoed, open: openCases(G).includes(c) })),
       election: e ? { cands: e.cands, visi: e.visi, reason: e.reason, done: e.done, votesIn: Object.keys(e.votes).length, voters: electionVoters(G).length } : null,
       impeach: impeachNumbers(G), skip: { n: Object.keys(G.skip).length, need: Math.ceil(free(G).filter(active).length * 0.6) },
       nightIn: G.phase === 'NIGHT' ? Object.keys(G.nightActs).length : 0, nightTotal: G.phase === 'NIGHT' ? free(G).length : 0,
@@ -779,12 +912,19 @@ tailwind.config = {
     if (r === 'JURNALIS') v.lastProtected = G.lastProtected[pid] == null ? null : G.lastProtected[pid];
     if (r === 'BROKER') v.recruitAvailable = !G.recruitUsed;
     if (r === 'GURU_BESAR') v.expertUsed = G.expertUsed;
-    if (pid === G.presidentId) v.president = { vetoAvailable: G.vetoAvailable, appeals: G.appeals, expertReport: G.expertReport };
+    if (r === 'KORUPTOR' || (dark && scandalActors(G).some((p) => p.id === pid))) v.korCooldown = !!(R(G, 'fitnahCooldown') && G.lastBadDay === G.day - 1);
+    if (pid === G.presidentId) v.president = { grasiAvailable: !!(R(G, 'grasi') && !G.grasiUsed), vetoAvailable: G.vetoAvailable, appeals: G.appeals, expertReport: G.expertReport };
     return v;
   }
 
+  // Ringkasan untuk daftar room publik (tanpa rahasia)
+  function summary(G, now) {
+    const h = P(G, G.creatorId);
+    return { code: G.code, pub: !!(G.settings && G.settings.public), phase: G.phase, n: G.players.length, humans: G.players.filter((p) => !p.bot).length,
+      host: h ? h.name : '', cdAt: G.lobby ? G.lobby.cdAt : 0, at: now || Date.now() };
+  }
   const Engine = {
-    MAX_DAYS,
+    MAX_DAYS, summary, filt,
     create, join, act, tick, setConnected, publicView, privateView, distCounts,
     DATA: { PERSONAS, ROLES, WIN_TEXT, DIST, DIST_KEYS, NINE_PLUS, CARDS, DARK_ROLES, MIN_PLAYERS, MAX_PLAYERS },
   };
@@ -826,17 +966,27 @@ window.makeLocalPlay = function () {
     label: 'Cloudflare', status: 'online', active: 'remote',
     init() { if (code) open(true); },
     async local(info) { NET.active = 'local'; return local.start(info); },
-    async connect({ action, code: c, name, persona }) {
+    async listRooms() {
+      try { const r = await fetch('/api/rooms', { cache: 'no-store' }); return (await r.json()).rooms || []; } catch (e) { return null; }
+    },
+    async connect({ action, code: c, name, persona, pub }) {
       NET.active = 'remote'; close();
-      if (action === 'create') {
-        try { const r = await fetch('/api/create', { method: 'POST' }); const j = await r.json(); if (j.err) return j; c = j.code; }
-        catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+      const skip = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (action === 'create' || action === 'quick') {
+          try {
+            const r = await fetch(action === 'quick' ? '/api/quick' : '/api/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(action === 'quick' ? { skip } : { public: pub !== false }) });
+            const j = await r.json(); if (j.err) return j; c = j.code;
+          } catch (e) { return { err: 'Server tidak bisa dihubungi. Coba lagi.' }; }
+        }
+        code = c; want = true; open(false);
+        const r = await request({ t: 'join', name, persona });
+        if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} return r; }
+        want = false; close(); code = null;
+        if (action !== 'quick') return r;
+        skip.push(c);   // room keburu penuh/mulai: cari yang lain
       }
-      code = c; want = true; open(false);
-      const r = await request({ t: 'join', name, persona });
-      if (r && r.ok) { LS.set('mdu_code', code); try { history.replaceState(null, '', '#' + code); } catch (e) {} }
-      else { want = false; close(); code = null; }
-      return r;
+      return { err: 'Belum dapat room. Coba lagi sebentar.' };
     },
     send(a) { if (NET.active === 'local') return local.send(a); return request({ t: 'act', a }); },
     leave() {
@@ -897,9 +1047,10 @@ window.makeLocalPlay = function () {
   let V = null, M = null, offset = 0;
   const U = {
     screen: 'LANDING', mode: 'create', joinCode: ['', '', '', ''], nick: LS.get('mdu_nick') || '', persona: LS.get('mdu_persona') || null,
-    flipped: false, sel: { target: null, card: null, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: '' },
+    flipped: false, sel: { target: null, card: null, good: false, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: '' },
     modal: null, toast: null, toastT: 0, seenFx: 0, fxShow: null, seenNotes: +(LS.get('mdu_seen_notes') || 0), mobileTab: 'chat', presDrawer: true, prisonerPick: null,
     busy: false, err: '', wall: 0, lastNewsId: 0, newsSkipped: 0, bannerIdx: 0,
+    pub: LS.get('mdu_pub') !== '0', rooms: null, roomsAt: 0, muted: new Set(),
   };
   const now = () => Date.now() + offset;
   const P = (id) => (V ? V.players.find((p) => p.id === id) : null);
@@ -918,7 +1069,7 @@ window.makeLocalPlay = function () {
       const prevPhase = V && V.phase, prevDay = V && V.day;
       V = pub; offset = pub.now - Date.now();
       const key = pub.phase + ':' + pub.day + ':' + (pub.election ? pub.election.cands.join() : '');
-      if (U.sel.phaseKey !== key) { U.sel = { target: null, card: null, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: key }; U.prisonerPick = null; U.presDrawer = true; U.wall = 0; }
+      if (U.sel.phaseKey !== key) { U.sel = { target: null, card: null, good: false, tab: 'aksi', kpk: 'sadap', survey: {}, pltTarget: null, pltCard: null, phaseKey: key }; U.prisonerPick = null; U.presDrawer = true; U.wall = 0; }
       if (prevPhase !== pub.phase) { if (pub.phase === 'REVEAL') U.flipped = false; window.scrollTo(0, 0); }
       if (pub.fx && pub.fx.id !== U.seenFx) { U.seenFx = pub.fx.id; if (now() < pub.fx.at + pub.fx.dur) { U.fxShow = pub.fx; setTimeout(() => { if (U.fxShow && U.fxShow.id === pub.fx.id) { U.fxShow = null; renderOverlay(); } }, Math.max(400, pub.fx.at + pub.fx.dur - now())); } }
       if (prevDay !== pub.day) U.letterSent = false;
@@ -953,7 +1104,7 @@ window.makeLocalPlay = function () {
   const sectionTitle = (t) => `<h3 class="text-[11px] font-semibold uppercase tracking-[.2em] text-zinc-400">${t}</h3>`;
   const ticker = (cls) => `<div class="overflow-hidden whitespace-nowrap bg-berita text-ink font-semibold text-sm py-1.5 ${cls || ''}"><span class="ticker">${TICKER.repeat(2)}</span></div>`;
   const nm = (p) => esc(p ? p.name : '?');
-  const tag = (p) => (p && p.bot ? ' <span class="text-[10px] text-zinc-500">🤖</span>' : '') + (p && !p.bot && !p.connected ? ' <span class="text-[10px] text-zinc-500" title="terputus">📴</span>' : '');
+  const tag = (p) => (p && p.bot ? ' <span class="text-[10px] text-zinc-500">🤖</span>' : '') + (p && p.afk ? ' <span class="text-[10px] font-bold rounded px-1 bg-white/10 text-zinc-300" title="autopilot sementara">AFK</span>' : p && !p.bot && !p.connected ? ' <span class="text-[10px] text-zinc-500" title="terputus">📴</span>' : '') + (p && U.muted.has(p.id) ? ' <span class="text-[10px]" title="dibisukan">🔇</span>' : '');
   function avatar(p, size, extra) {
     const isP = V && p.id === V.presidentId;
     return `<div class="relative ${size || 'size-12'} shrink-0 rounded-2xl grid place-items-center text-2xl bg-ink-700 ring-2 ${isP ? 'ring-istana shadow-neon-istana' : 'ring-white/10'} ${p.jailed ? 'grayscale opacity-50' : ''} ${extra || ''}">${persona(p.persona).e}${isP ? '<span class="absolute -top-2 -right-2 text-sm">👑</span>' : ''}${p.jailed ? '<span class="absolute -bottom-1 -right-1 text-xs bg-ink rounded px-0.5">⛓</span>' : ''}</div>`;
@@ -970,23 +1121,26 @@ window.makeLocalPlay = function () {
 
   // ------------------------------------------------------- LANDING
   function scrLanding() {
-    const hasLocal = !!window.NET.local;
+    const hasLocal = !!window.NET.local, online = !!window.NET.listRooms;
     return `<div class="min-h-screen flex flex-col">${ticker()}
-    <main class="flex-1 grid place-items-center px-6 py-12 relative overflow-hidden">
+    <main class="flex-1 grid grid-cols-[minmax(0,1fr)] place-items-center px-6 py-12 relative overflow-hidden">
       <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ff2e4d1f,transparent_55%),radial-gradient(ellipse_at_bottom_right,#f5c54214,transparent_50%)]"></div>
       <div class="relative w-full max-w-md text-center rise">
         <p class="font-mono text-xs tracking-[.3em] text-zinc-500 mb-4">SIDANG NO. 01/2026 • RAHASIA NEGARA</p>
-        <h1 class="font-display uppercase leading-[.85] text-6xl sm:text-7xl text-white">Mondayunited<br><span class="text-korup glitch inline-block">States</span></h1>
+        <h1 class="font-display uppercase leading-[.85] text-[clamp(2.2rem,10.5vw,4.5rem)] text-white">Mondayunited<br><span class="text-korup glitch inline-block">States</span></h1>
         <p class="mt-4 text-zinc-400">Sidang dimulai. Siapa yang masuk angin?</p>
         <div class="mt-10 space-y-4">
-          <button data-a="goCreate" class="${btn('istana')} w-full h-14 text-lg">🏛️ Buat Room Baru</button>
+          ${online ? `<button data-a="goQuick" class="${btn('istana')} w-full h-14 text-lg pulse-gold">⚡ Main Cepat</button>
+          <p class="-mt-2 text-xs text-zinc-500">Langsung masuk ke room publik yang sedang menunggu pemain.</p>
+          <div class="grid grid-cols-2 gap-2"><button data-a="goRooms" class="${btn('ghost')} w-full">🔎 Cari Room</button><button data-a="goCreate" class="${btn('ghost')} w-full">🏛️ Buat Room</button></div>`
+          : `<button data-a="goCreate" class="${btn('istana')} w-full h-14 text-lg">🏛️ Buat Room Baru</button>`}
           <div class="flex items-center gap-3 text-xs text-zinc-500 uppercase tracking-widest"><span class="h-px flex-1 bg-white/10"></span>atau gabung<span class="h-px flex-1 bg-white/10"></span></div>
           <div class="flex items-center justify-center gap-2">
-            ${U.joinCode.map((d, i) => `<input data-otp="${i}" inputmode="numeric" maxlength="1" value="${d}" aria-label="Digit ${i + 1} kode room" class="size-14 sm:size-16 rounded-xl bg-ink-800 ring-1 ring-white/15 text-center font-mono text-3xl text-istana focus:ring-2 focus:ring-istana outline-none">`).join('')}
-            <button data-a="goJoin" class="${btn('ghost')} h-14 sm:h-16 px-4">Masuk →</button>
+            ${U.joinCode.map((d, i) => `<input data-otp="${i}" inputmode="numeric" maxlength="1" value="${d}" aria-label="Digit ${i + 1} kode room" class="size-12 sm:size-16 rounded-xl bg-ink-800 ring-1 ring-white/15 text-center font-mono text-2xl sm:text-3xl text-istana focus:ring-2 focus:ring-istana outline-none">`).join('')}
+            <button data-a="goJoin" class="${btn('ghost')} h-12 sm:h-16 px-3 sm:px-4">Masuk →</button>
           </div>
           <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
-          ${hasLocal ? '<button data-a="goLocal" class="w-full text-sm text-zinc-400 hover:text-white underline underline-offset-4">🎮 Latihan solo melawan bot (offline)</button>' : ''}
+          ${hasLocal ? '<button data-a="goLocal" class="w-full h-12 rounded-xl text-sm text-zinc-300 ring-1 ring-white/10 hover:bg-white/5">🎮 Latihan offline melawan bot</button>' : ''}
         </div>
         <p class="mt-8 text-xs text-zinc-600">6–12 pemain • ${esc(window.NET.label || '')}</p>
       </div>
@@ -994,7 +1148,10 @@ window.makeLocalPlay = function () {
   }
   function scrIdentity() {
     const sel = U.persona ? persona(U.persona) : null;
-    const title = U.mode === 'join' ? `Gabung ke Room #${U.joinCode.join('')}` : U.mode === 'local' ? 'Latihan Solo' : 'Buat Room Baru';
+    const title = U.mode === 'join' ? `Gabung ke Room #${U.joinCode.join('')}` : U.mode === 'local' ? 'Latihan Offline' : U.mode === 'quick' ? 'Main Cepat' : 'Buat Room Baru';
+    const pubPick = U.mode === 'create' && window.NET.listRooms ? `<div class="mt-6"><p class="text-sm text-zinc-400">Jenis room</p><div class="mt-2 grid grid-cols-2 gap-2">
+        <button data-a="setPub" data-v="1" aria-pressed="${U.pub}" class="rounded-xl p-3 text-left ring-1 ${U.pub ? 'ring-2 ring-istana bg-istana-soft' : 'ring-white/10 bg-ink-800'}"><b>🌐 Publik</b><span class="block text-xs text-zinc-400 mt-0.5">Muncul di Cari Room. Mulai otomatis saat 6 orang.</span></button>
+        <button data-a="setPub" data-v="0" aria-pressed="${!U.pub}" class="rounded-xl p-3 text-left ring-1 ${!U.pub ? 'ring-2 ring-istana bg-istana-soft' : 'ring-white/10 bg-ink-800'}"><b>🔒 Privat</b><span class="block text-xs text-zinc-400 mt-0.5">Hanya lewat kode. Kamu yang menekan mulai.</span></button></div></div>` : '';
     return `<div class="min-h-screen flex flex-col">${ticker()}
     <main class="flex-1 px-5 py-10"><div class="w-full max-w-xl mx-auto rise">
       <p class="text-xs uppercase tracking-[.2em] text-zinc-400">Formulir Daftar Hadir • ${title}</p>
@@ -1007,10 +1164,36 @@ window.makeLocalPlay = function () {
         ${PERSONAS.map((p) => `<button role="radio" aria-checked="${U.persona === p.id}" data-a="persona" data-v="${p.id}" title="${p.n}" class="aspect-square rounded-2xl bg-ink-800 ring-1 ring-white/10 text-3xl hover:ring-white/30 transition aria-checked:ring-2 aria-checked:ring-istana aria-checked:bg-istana-soft">${p.e}</button>`).join('')}
       </div>
       <p class="mt-3 min-h-10 text-sm">${sel ? `<b class="text-istana">${sel.n}</b> <span class="text-zinc-400 italic">“${sel.t}”</span>` : '<span class="text-zinc-600">Belum memilih persona.</span>'}</p>
-      <p class="text-xs text-korup min-h-4">${esc(U.err)}</p>
+      ${pubPick}
+      <p class="text-xs text-korup min-h-4 mt-2">${esc(U.err)}</p>
       <button data-a="enter" class="${btn('primary')} w-full mt-2" ${U.persona && U.nick.trim() && !U.busy ? '' : 'disabled'}>${U.busy ? '⏳ Menghubungkan…' : '📝 Daftar Hadir'}</button>
       <button data-a="back" class="mt-3 w-full text-sm text-zinc-500 hover:text-zinc-300">← Kembali</button>
     </div></main></div>`;
+  }
+  function scrRooms() {
+    const list = U.rooms;
+    const row = (r) => `<button data-a="pickRoom" data-v="${esc(r.code)}" class="w-full flex items-center gap-3 rounded-2xl bg-ink-800 ring-1 ring-white/10 hover:ring-istana/60 p-4 text-left">
+        <div class="flex-1 min-w-0"><p class="font-semibold truncate">Sidang ${esc(r.host || 'Tanpa Nama')}</p><p class="text-xs text-zinc-400">#${esc(r.code)} • ${r.humans} orang${r.n > r.humans ? ` + ${r.n - r.humans} bot` : ''}${r.cdLeft ? ` • <span class="text-istana">mulai ±${r.cdLeft}s</span>` : ''}</p></div>
+        <div class="text-right"><p class="font-mono text-lg ${r.n >= 6 ? 'text-reform' : 'text-zinc-200'}">${r.n}/12</p><div class="mt-1 h-1.5 w-16 rounded-full bg-white/10 overflow-hidden"><div class="h-full ${r.n >= 6 ? 'bg-reform' : 'bg-istana'}" style="width:${(r.n / 12) * 100}%"></div></div></div></button>`;
+    return `<div class="min-h-screen flex flex-col">${ticker()}
+    <main class="flex-1 px-5 py-8"><div class="w-full max-w-xl mx-auto rise">
+      <div class="flex items-end justify-between gap-3"><div><p class="text-xs uppercase tracking-[.2em] text-zinc-400">Daftar Sidang Terbuka</p><h2 class="font-display text-4xl uppercase mt-1">Cari Room</h2></div>
+        <button data-a="refreshRooms" class="${btn('ghost')} h-10 px-3 text-sm">↻ Muat ulang</button></div>
+      <div class="mt-5 space-y-2">${list === null ? '<p class="text-sm text-zinc-500">⏳ Memuat daftar…</p>' : list === false ? '<p class="text-sm text-korup">Gagal memuat daftar. Coba muat ulang.</p>'
+        : list.length ? list.map(row).join('') : `<div class="rounded-2xl border-2 border-dashed border-white/15 p-6 text-center"><p class="text-zinc-300">Belum ada room publik yang menunggu.</p><p class="text-sm text-zinc-500 mt-1">Jadilah yang pertama, nanti orang lain yang menekan Main Cepat akan masuk ke room-mu.</p><button data-a="goCreate" class="${btn('istana')} mt-4">🏛️ Buat Room Publik</button></div>`}</div>
+      <p class="mt-4 text-xs text-zinc-600">Daftar diperbarui otomatis setiap 5 detik. Room privat tidak tampil di sini.</p>
+      <button data-a="back" class="mt-6 w-full text-sm text-zinc-500 hover:text-zinc-300">← Kembali</button>
+    </div></main></div>`;
+  }
+  function lobbyBanner(creator, n) {
+    const L = V.lobby || {}, pub = V.settings.public;
+    if (L.cdAt) return `<div class="mt-4 rounded-2xl bg-istana-soft ring-1 ring-istana/40 p-4 flex flex-wrap items-center gap-3">
+        <div class="flex-1 min-w-[150px]"><p class="text-xs uppercase tracking-[.2em] text-istana">Mulai otomatis</p><p class="font-mono text-3xl text-white tabular-nums" data-cd>--:--</p><p class="text-xs text-zinc-400">Sidang tetap bisa diikuti sampai 12 orang.</p></div>
+        ${creator ? `<div class="flex gap-2"><button data-a="extend" class="${btn('ghost')} h-11 px-3 text-sm" ${L.ext >= L.extMax ? 'disabled' : ''}>⏳ +60 detik <span class="text-[10px] text-zinc-500">${L.extMax - L.ext}x</span></button><button data-a="start" class="${btn('istana')} h-11 px-4 text-sm">Mulai sekarang ▶</button></div>` : ''}</div>`;
+    if (L.botOffer) return `<div class="mt-4 rounded-2xl bg-ink-800 ring-1 ring-white/15 p-4"><p class="font-semibold">🦗 Sepi nih, sudah 3 menit menunggu.</p>
+        ${creator ? `<p class="text-sm text-zinc-400 mt-1">Isi ${6 - n} kursi kosong dengan bot supaya bisa mulai? Pemain baru tetap bisa masuk sampai sidang dimulai.</p><button data-a="fillBots" class="${btn('istana')} mt-3 w-full">🤖 Isi kekurangan dengan bot</button>` : '<p class="text-sm text-zinc-400 mt-1">Pemegang palu bisa mengisi kursi kosong dengan bot.</p>'}</div>`;
+    if (pub && n < 6) return `<div class="mt-4 rounded-2xl bg-ink-800/60 ring-1 ring-white/10 p-3 text-sm text-zinc-400">🌐 Room publik • menunggu ${6 - n} orang lagi, lalu mulai otomatis dalam 60 detik.</div>`;
+    return '';
   }
   function scrLobby() {
     const creator = M.id === V.creatorId, n = V.players.length, dc = V.dist || { d: [], dark: 0, ref: 0, warga: 0, valid: false };
@@ -1025,11 +1208,13 @@ window.makeLocalPlay = function () {
           <div><p class="text-xs uppercase tracking-[.2em] text-zinc-400">Ruang Tunggu DPR</p><h2 class="font-display text-4xl uppercase">Menunggu Peserta</h2></div>
           <button data-a="copyCode" class="group flex items-center gap-3 rounded-2xl bg-ink-800 ring-1 ring-istana/30 px-4 py-2 hover:ring-istana"><span class="font-mono text-3xl tracking-[.3em] text-istana">${esc(V.code)}</span><span class="text-xs text-zinc-400 group-hover:text-istana">⧉ Salin</span></button>
         </div>
-        <p class="mt-2 text-sm text-zinc-400"><span class="font-mono text-zinc-200">${n}/12</span> hadir • minimal 6 untuk memulai${creator ? ' • kurang orang? tambahkan bot' : ''}</p>
+        <p class="mt-2 text-sm text-zinc-400"><span class="font-mono text-zinc-200">${n}/12</span> hadir • minimal 6 untuk memulai${window.NET.active === 'local' ? ' • latihan offline' : V.settings.public ? ' • 🌐 publik' : ' • 🔒 privat'}</p>
+        ${lobbyBanner(creator, n)}
         <div class="mt-5 grid grid-cols-3 sm:grid-cols-4 gap-3">
           ${V.players.map((p) => `<div class="relative rounded-2xl bg-ink-800 ring-1 ${p.id === M.id ? 'ring-istana/50' : 'ring-white/10'} p-3 flex flex-col items-center gap-1 rise">
               ${p.id === V.creatorId ? '<span class="absolute -top-2 -right-2 text-[10px] rounded-full bg-istana text-ink px-1.5 font-bold">PALU</span>' : ''}
-              ${creator && p.id !== M.id ? `<button data-a="kick" data-v="${esc(p.id)}" class="absolute top-1 left-1 size-6 rounded-md text-xs text-zinc-500 hover:bg-korup hover:text-white" title="Keluarkan">✕</button>` : ''}
+              ${creator && p.id !== M.id ? `<button data-a="kick" data-v="${esc(p.id)}" class="absolute top-1 left-1 size-7 rounded-md text-xs text-zinc-500 hover:bg-korup hover:text-white" title="Keluarkan" aria-label="Keluarkan ${nm(p)}">✕</button>` : ''}
+              ${!p.bot && p.id !== M.id ? `<button data-a="mute" data-v="${esc(p.id)}" class="absolute bottom-1 right-1 size-7 rounded-md text-xs ${U.muted.has(p.id) ? 'bg-white/10' : 'text-zinc-600 hover:bg-white/10'}" title="${U.muted.has(p.id) ? 'Bunyikan' : 'Bisukan'}" aria-label="Bisukan ${nm(p)}">${U.muted.has(p.id) ? '🔇' : '🔈'}</button>` : ''}
               <div class="text-3xl">${persona(p.persona).e}</div><div class="font-semibold truncate max-w-full">${nm(p)}${tag(p)}${p.id === M.id ? ' <span class="text-xs text-istana">(Anda)</span>' : ''}</div>
               <div class="text-[11px] text-zinc-500 truncate max-w-full">${persona(p.persona).n}</div></div>`).join('')}
           ${creator && n < 12 ? '<button data-a="addBot" class="rounded-2xl border-2 border-dashed border-white/15 grid place-items-center text-sm text-zinc-400 hover:text-white hover:border-istana/60 min-h-[104px]">🤖 + Tambah Bot</button>' : ''}
@@ -1046,6 +1231,9 @@ window.makeLocalPlay = function () {
       </section>
       <aside class="rounded-2xl bg-ink-800/80 ring-1 ring-white/10 p-5 h-fit md:sticky md:top-6 rise">
         ${sectionTitle('Pengaturan Sidang' + (creator ? ' • Anda pemegang palu' : ''))}
+        ${window.NET.listRooms && window.NET.active !== 'local' ? `<div class="mt-4 flex items-center justify-between"><span>${s.public ? '🌐 Room publik' : '🔒 Room privat'}</span>
+          <button data-a="visibility" role="switch" aria-checked="${!!s.public}" ${creator ? '' : 'disabled'} class="relative h-7 w-14 rounded-full transition ${s.public ? 'bg-reform' : 'bg-white/15'} disabled:opacity-60"><span class="absolute top-1 ${s.public ? 'left-8' : 'left-1'} size-5 rounded-full bg-ink transition-all"></span></button></div>
+        <p class="text-xs text-zinc-500 mt-1">${s.public ? 'Tampil di Cari Room & Main Cepat. Mulai otomatis 60 detik setelah 6 orang.' : 'Hanya yang punya kode. Mulai manual. Cocok untuk main bareng teman.'}</p>` : ''}
         <div class="mt-4 flex items-center justify-between"><span>Distribusi role</span>
           <button data-a="autoDist" role="switch" aria-checked="${s.auto}" ${creator ? '' : 'disabled'} class="relative h-7 w-14 rounded-full transition ${s.auto ? 'bg-reform' : 'bg-white/15'} disabled:opacity-60"><span class="absolute top-1 ${s.auto ? 'left-8' : 'left-1'} size-5 rounded-full bg-ink transition-all"></span></button></div>
         <p class="text-xs text-zinc-500 mt-1">${s.auto ? 'Otomatis mengikuti jumlah pemain.' : 'Manual — Warga Sipil mengisi sisa kursi.'}</p>
@@ -1144,13 +1332,16 @@ window.makeLocalPlay = function () {
   }
   const head = (icon, title, color) => `<div class="flex items-center gap-2 font-display text-2xl uppercase ${color}">${icon} ${title}</div>`;
   function scandalForm(tk, ck, label) {
+    const good = !!U.sel.good;
     const t = U.sel[tk] != null ? P(U.sel[tk]) : null, c = card(U.sel[ck] || (M.hand || [])[0]);
     const darkIds = [M.id].concat((M.allies || []).map((a) => a.id));
     const kc = M.korChoice;
-    return `${kc ? `<div class="rounded-lg bg-korup-soft ring-1 ring-korup/30 px-3 py-2 text-xs">📌 Pilihan sindikat saat ini: <b>${nm(P(kc.target))}</b> • ${esc(card(kc.card).title)} <span class="text-zinc-400">(oleh ${nm(P(kc.by))}; pilihan terakhir yang dipakai)</span></div>` : ''}
-      <div class="mt-3">${sectionTitle('1 · Target')}<div class="mt-2">${targetList({ key: tk, exclude: darkIds, disabled: (p) => p.id === V.presidentId, disLabel: '👑 imun' })}</div></div>
-      <div class="mt-2">${sectionTitle('2 · Kartu Skandal (5 acak dari 20)')}${cardPicker(ck)}</div>
-      <div class="rounded-lg bg-berita text-ink px-3 py-2 text-xs font-bold uppercase">📰 Preview: ${t && c ? esc(c.h.replace('{t}', t.name)) : 'Pilih target untuk melihat headline'}</div>
+    const toggle = `<div class="grid grid-cols-2 rounded-xl bg-white/5 p-1 text-sm">${[[0, '📰 Berita Jelek'], [1, '🌟 Berita Bagus']].map(([v, l]) => `<button data-a="korGood" data-v="${v}" class="h-10 rounded-lg ${!!v === good ? 'bg-ink-700 text-white' : 'text-zinc-400'}">${l}</button>`).join('')}</div>
+      <p class="text-xs text-zinc-500 mt-2">${good ? 'Pencitraan: orang yang Anda pilih kebal dari OTT KPK malam ini (boleh sekutu atau diri sendiri). Berita ini rahasia. Kalau Jurnalis kebetulan mengecek orang yang sama, pencitraannya batal dan Jurnalis tahu.' : 'Fitnah: target jadi Tersangka besok (Faksi Gelap tidak bisa jadi target). Kalau Jurnalis mengecek target yang sama, kasusnya jadi HOAKS.'}</p>`;
+    return `${kc ? `<div class="mb-2 rounded-lg bg-korup-soft ring-1 ring-korup/30 px-3 py-2 text-xs">📌 Pilihan sindikat saat ini: <b>${nm(P(kc.target))}</b> • ${kc.good ? '🌟 pencitraan' : esc(card(kc.card).title)} <span class="text-zinc-400">(oleh ${nm(P(kc.by))}; pilihan terakhir yang dipakai)</span></div>` : ''}${toggle}
+      <div class="mt-3">${sectionTitle('1 · Target')}<div class="mt-2">${targetList({ key: tk, exclude: good ? [] : darkIds, self: good, disabled: (p) => p.id === V.presidentId, disLabel: '👑 imun' })}</div></div>
+      ${good ? '' : `<div class="mt-2">${sectionTitle('2 · Kartu Skandal (5 acak dari 20)')}${cardPicker(ck)}</div>
+      <div class="rounded-lg bg-berita text-ink px-3 py-2 text-xs font-bold uppercase">📰 Preview: ${t && c ? esc(c.h.replace('{t}', t.name)) : 'Pilih target untuk melihat headline'}</div>`}
       <button data-a="${label}" class="${btn('korup')} w-full mt-3" ${t ? '' : 'disabled'}>🔒 Kirim ke Redaksi</button>`;
   }
   function nightDrawer() {
@@ -1163,12 +1354,12 @@ window.makeLocalPlay = function () {
       const lastInv = r === 'KPK' && act.kind === 'INVESTIGATE' && M.investigations && M.investigations[M.investigations.length - 1];
       const res = lastInv ? `<div class="mt-4 rounded-xl ${lastInv.fac === 'GELAP' ? 'bg-korup-soft ring-korup/40' : 'bg-reform-soft ring-reform/40'} ring-1 p-4 text-left"><p class="text-xs uppercase tracking-widest text-zinc-400">Hasil Sadapan</p><p class="mt-1 text-lg">${persona(P(lastInv.id).persona).e} <b>${nm(P(lastInv.id))}</b> → ${facBadge(lastInv.fac)}</p></div>` : '';
       const T = act.target != null ? nm(P(act.target)) : '';
-      const msg = act.kind === 'DUMMY' ? 'Anda melewati malam ini.' : { KORUPTOR: `Kasus terdaftar. No. Reg: KF/${String(V.day).padStart(2, '0')}/${esc(V.code)}`, BROKER: act.kind === 'RECRUIT' ? 'Amplop terkirim. Hasilnya diketahui pagi nanti.' : 'Anda memantau dari kejauhan.', BUZZER: `Tagar #${T}Gagal dijadwalkan trending.`, KPK: act.kind === 'OTT' ? `Tim OTT bergerak ke rumah ${T}. Hasilnya diumumkan pagi nanti.` : 'Alat sadap terpasang.', JURNALIS: `Tim cek fakta siaga untuk ${T}.`, PENGAMAT: 'Teropong terpasang. Hasil keluar saat fajar.', GURU_BESAR: 'Nilai dikirim. Semua dapat C.', WARGA: 'Terima kasih, survei Anda akan diabaikan.' }[r];
+      const msg = act.kind === 'DUMMY' ? 'Anda melewati malam ini.' : { KORUPTOR: 'Berita terkirim ke redaksi. Terbit saat fajar (kalau lolos cek fakta).', BROKER: act.kind === 'RECRUIT' ? 'Amplop terkirim. Hasilnya diketahui pagi nanti.' : 'Anda memantau dari kejauhan.', BUZZER: `Tagar #${T}Gagal dijadwalkan trending.`, KPK: act.kind === 'OTT' ? `Tim OTT bergerak ke rumah ${T}. Hasilnya diumumkan pagi nanti.` : 'Alat sadap terpasang.', JURNALIS: `Tim cek fakta siaga untuk ${T}.`, PENGAMAT: 'Teropong terpasang. Hasil keluar saat fajar.', GURU_BESAR: 'Nilai dikirim. Semua dapat C.', WARGA: 'Terima kasih, survei Anda akan diabaikan.' }[r];
       return `${plt}<div class="text-center py-6"><div class="text-5xl text-reform stamp inline-block">✓</div><p class="mt-3 font-semibold">${msg}</p>${res}<p class="mt-3 text-sm text-zinc-500">Menunggu fajar… <span class="font-mono">(${V.nightIn}/${V.nightTotal})</span></p></div>`;
     }
     const skip = '<button data-a="nskip" class="mt-3 w-full text-xs text-zinc-500 hover:text-zinc-300">Lewati malam ini</button>';
     let body = '';
-    if (r === 'KORUPTOR') body = `${head('🐀', 'Kasus Fiktif Malam Ini', 'text-korup')}<div class="mt-3">${scandalForm('target', 'card', 'korSubmit')}</div>${M.korChoice && M.korChoice.by !== M.id ? `<button data-a="korAgree" class="${btn('ghost')} w-full mt-2">👍 Setuju pilihan rekan</button>` : ''}`;
+    if (r === 'KORUPTOR') body = `${head('🐀', 'Berita Fiktif Malam Ini', 'text-korup')}<div class="mt-3">${scandalForm('target', 'card', 'korSubmit')}</div>${M.korChoice && M.korChoice.by !== M.id ? `<button data-a="korAgree" class="${btn('ghost')} w-full mt-2">👍 Setuju pilihan rekan</button>` : ''}`;
     else if (r === 'BROKER') {
       const tabs = `<div class="mt-3 grid grid-cols-2 rounded-xl bg-white/5 p-1 text-sm">${['aksi', 'rekrut'].map((t) => `<button data-a="tab" data-v="${t}" class="h-9 rounded-lg ${U.sel.tab === t ? 'bg-ink-700 text-white' : 'text-zinc-400'}">${t === 'aksi' ? '👀 Pantau' : '🤝 Rekrut'}</button>`).join('')}</div>`;
       if (U.sel.tab === 'aksi') body = `${head('🤝', 'Meja Broker', 'text-korup')}${tabs}<p class="mt-4 text-sm text-zinc-400">Malam ini Anda memantau Grup WA Gelap. ${M.recruitAvailable ? 'Hak rekrut masih tersedia (1x).' : 'Hak rekrut sudah terpakai.'}</p><button data-a="nact" data-v="PASS" class="${btn('ghost')} w-full mt-4">Selesai memantau</button>`;
@@ -1180,8 +1371,9 @@ window.makeLocalPlay = function () {
       const inv = M.investigations || [];
       const tabs = `<div class="mt-3 grid grid-cols-2 rounded-xl bg-white/5 p-1 text-sm">${[['sadap', '🎧 Sadap'], ['ott', '🚨 OTT']].map(([t, l]) => `<button data-a="kpkTab" data-v="${t}" class="h-9 rounded-lg ${U.sel.kpk === t ? 'bg-ink-700 text-white' : 'text-zinc-400'}">${l}</button>`).join('')}</div>`;
       body = `${head('🕵️', U.sel.kpk === 'ott' ? 'Operasi Tangkap Tangan' : 'Penyadapan', 'text-reform')}${tabs}
-        <p class="text-xs text-zinc-500 mt-3">${U.sel.kpk === 'ott' ? 'Jika target Faksi Gelap, ia jadi Tersangka besok. Jika bersih, berita mengumumkan OTT salah sasaran (publik tahu ia bersih). Presiden imun.' : 'Ketahui faksi satu pemain. Hasil hanya untuk Anda.'}</p>
+        <p class="text-xs text-zinc-500 mt-3">${U.sel.kpk === 'ott' ? 'Target jadi Tersangka besok, siapa pun dia. Berkasnya tampil sama persis dengan berita tuduhan Koruptor, jadi sadap dulu supaya tidak salah sasaran. Presiden imun.' : 'Ketahui faksi satu pemain. Hasil hanya untuk Anda.'}</p>
         <div class="mt-3">${targetList({ ring: 'aria-checked:ring-reform', mark: (p) => { const i = inv.find((x) => x.id === p.id); return i ? (i.fac === 'GELAP' ? '🔴 gelap' : '🟢 bersih') : ''; }, disabled: U.sel.kpk === 'ott' ? (p) => p.id === V.presidentId : null, disLabel: '👑 imun' })}</div>
+        ${U.sel.kpk === 'ott' && U.sel.target != null && !inv.some((x) => x.id === U.sel.target) ? '<div class="mt-3 rounded-xl bg-istana-soft ring-1 ring-istana/40 px-3 py-2 text-xs text-istana">⚠️ Target ini belum Anda sadap. Kalau ia bersih, berkasnya tetap terbit dan Presiden bisa menjebloskan orang tak bersalah.</div>' : ''}
         <button data-a="nact" data-v="${U.sel.kpk === 'ott' ? 'OTT' : 'INVESTIGATE'}" class="${btn('reform')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>${U.sel.kpk === 'ott' ? '🚨 Jalankan OTT' : '🎧 Sadap'}</button>
         ${inv.length ? `<div class="mt-4">${sectionTitle('Berkas Sadapan')}<ul class="mt-2 space-y-1 text-sm">${inv.map((i) => `<li class="flex justify-between gap-2"><span>Malam ${i.night}: ${nm(P(i.id))}</span>${facBadge(i.fac)}</li>`).join('')}</ul></div>` : ''}`;
     } else if (r === 'JURNALIS') body = `${head('🎙️', 'Meja Cek Fakta', 'text-reform')}<p class="text-xs text-zinc-500 mt-1">Fitnah ke orang yang Anda cek fakta akan dicap HOAKS. Boleh diri sendiri, tidak boleh orang yang sama 2 malam berturut.</p><div class="mt-3">${targetList({ self: true, ring: 'aria-checked:ring-reform', disabled: (p) => p.id === M.lastProtected, disLabel: 'kemarin' })}</div><button data-a="nact" data-v="FACTCHECK" class="${btn('reform')} w-full mt-3" ${U.sel.target != null ? '' : 'disabled'}>🔎 Cek Fakta</button><p class="mt-3 text-[11px] text-zinc-500">📰 Jika dijebloskan Presiden, Anda dapat Hak Headline untuk Breaking News berikutnya.</p>`;
@@ -1224,7 +1416,7 @@ window.makeLocalPlay = function () {
         <div class="slide-in self-start ${bar} font-display text-2xl md:text-4xl uppercase px-5 py-1">Breaking News</div>
         <h1 class="mt-6 font-display text-5xl md:text-7xl uppercase leading-[.92] text-white chroma rise">${esc(n.head)}</h1>
         ${n.low ? `<div class="mt-8 bg-berita text-ink px-4 py-2 font-semibold rise" style="animation-delay:.3s">🟡 ${esc(n.low)}</div>` : ''}
-        ${n.kpk ? `<div class="mt-3 bg-reform text-ink px-4 py-2 font-semibold rise" style="animation-delay:.4s">🚨 ${esc(n.kpk)}</div>` : ''}
+        ${(n.more || []).map((m, i) => `<div class="mt-5 rise max-w-3xl" style="animation-delay:${0.4 + i * 0.1}s"><div class="inline-block bg-berita text-ink text-xs font-bold uppercase tracking-widest px-2 py-1">Berita lain</div><h2 class="mt-1 font-display text-3xl md:text-4xl uppercase leading-none text-white">${esc(m.head)}</h2><div class="mt-2 bg-berita text-ink px-3 py-1 text-sm font-semibold inline-block">🟡 ${esc(m.low)}</div></div>`).join('')}
         ${n.column ? `<div class="mt-5 rise max-w-3xl" style="animation-delay:.45s"><div class="inline-block bg-ink text-berita ring-1 ring-berita/50 text-xs font-bold uppercase tracking-widest px-2 py-1">📰 Kolom dari Balik Jeruji • ${nm(P(n.column.by))}</div><div class="bg-kertas text-ink font-mono text-lg md:text-xl px-4 py-3 -rotate-[.4deg]">“${esc(n.column.text)}”</div></div>` : ''}
         <div class="mt-6 max-w-md rise" style="animation-delay:.5s">${scandalMeter()}</div></div>
       ${ticker()}<div class="flex justify-between items-center px-6 py-4"><span class="text-xs text-zinc-500">Sidang dimulai otomatis…</span>${timerRing('stroke-berita', 40)}</div></div>`;
@@ -1233,7 +1425,7 @@ window.makeLocalPlay = function () {
   // ------------------------------------------------------- SIDANG
   function chatLine(c) {
     if (c.sys) return `<p class="mx-auto text-center text-xs text-zinc-500 italic px-4">${esc(c.text)}</p>`;
-    const p = P(c.from); if (!p) return '';
+    const p = P(c.from); if (!p || U.muted.has(c.from)) return '';
     const mine = c.from === M.id, isP = c.from === V.presidentId;
     if (c.letter) return `<div class="max-w-[85%] ${mine ? 'ml-auto' : ''}"><p class="text-[10px] text-zinc-500 mb-0.5">📜 Surat dari balik jeruji • ${nm(p)}</p><div class="bg-kertas text-ink rounded-lg px-3 py-2 font-mono text-sm -rotate-[.5deg]">${esc(c.text)}</div></div>`;
     return `<div class="flex gap-2 ${mine ? 'flex-row-reverse' : ''}"><div class="size-8 shrink-0 rounded-xl bg-ink-700 grid place-items-center">${persona(p.persona).e}</div>
@@ -1242,7 +1434,7 @@ window.makeLocalPlay = function () {
   function chatPanel(title, h) {
     const mine = me(), canChat = !mine.jailed, canLetter = mine.jailed && !M.letterUsed && ['SIDANG', 'DECISION'].includes(V.phase);
     return `<div class="flex flex-col rounded-2xl bg-ink-800/50 ring-1 ring-white/10 ${h}">
-      <div class="px-4 py-3 border-b border-white/5 flex justify-between items-center">${sectionTitle('💬 ' + title)}<span class="text-[10px] text-zinc-500">${V.players.filter((p) => !p.bot && p.connected).length} online</span></div>
+      <div class="px-4 py-3 border-b border-white/5 flex justify-between items-center">${sectionTitle('💬 ' + title)}<span class="flex items-center gap-2"><span class="text-[10px] text-zinc-500">${V.players.filter((p) => !p.bot && p.connected).length} online</span><button data-a="muteMenu" class="text-[11px] rounded-md px-2 py-1 bg-white/5 hover:bg-white/10" title="Bisukan pemain">🔇${U.muted.size ? ' ' + U.muted.size : ''}</button></span></div>
       <div class="flex-1 overflow-y-auto p-4 space-y-3" data-scroll-key="chat" data-autoscroll aria-live="polite">${V.chat.map(chatLine).join('')}</div>
       <div class="px-3 pt-2 flex gap-1">${REACTS.map((e) => `<button data-a="react" data-v="${e}" class="size-9 rounded-lg hover:bg-white/10 ${canChat ? '' : 'opacity-30 pointer-events-none'}">${e}</button>`).join('')}</div>
       <form data-form="chat" class="flex gap-2 p-3 border-t border-white/5"><input id="chatInput" name="t" maxlength="200" autocomplete="off" ${canChat || canLetter ? '' : 'disabled'} placeholder="${canChat ? 'Sampaikan pendapat Anda…' : canLetter ? '📜 Tulis surat dari balik jeruji (1x hari ini)' : 'Anda di rutan. Surat hari ini sudah terkirim.'}" class="flex-1 min-w-0 h-11 rounded-xl ${canLetter ? 'bg-kertas text-ink font-mono' : 'bg-ink-800'} px-4 text-base md:text-sm outline-none focus:ring-1 focus:ring-reform disabled:opacity-50">
@@ -1252,8 +1444,8 @@ window.makeLocalPlay = function () {
     const cs = V.cases || [];
     if (!cs.length) return '<div class="rounded-xl bg-kertas text-ink p-4 font-mono text-sm"><p class="text-korup font-bold">📁 BERKAS HARI INI</p><p class="mt-2">Tidak ada kasus hari ini. Nikmati kopi Anda.</p></div>';
     return cs.map((c) => { const s = P(c.suspect); return `<div class="relative rounded-xl bg-kertas text-ink p-4 font-mono text-sm overflow-hidden">
-      <p class="${c.kind === 'KPK' ? 'text-emerald-700' : 'text-korup'} font-bold">${c.kind === 'KPK' ? '🚨' : '📁'} BERKAS ${esc(c.no)}</p>
-      <p class="mt-2">Tersangka : ${persona(s.persona).e} <b>${nm(s)}</b></p><p>Tuduhan  : ${c.kind === 'KPK' ? 'Tertangkap tangan KPK' : esc(card(c.card).title)}</p>
+      <p class="text-korup font-bold">📁 BERKAS ${esc(c.no)}</p>
+      <p class="mt-2">Tersangka : ${persona(s.persona).e} <b>${nm(s)}</b></p><p>Tuduhan  : ${esc(card(c.card).title)}</p>
       <p class="mt-2 text-xs opacity-70">${c.vetoed ? 'Status: DIBATALKAN (Veto)' : s.jailed ? 'Status: DIPENJARA' : V.decided ? 'Status: ditutup Keppres' : forPres ? 'Status: menunggu keputusan Anda' : V.phase === 'DECISION' ? 'Status: Presiden sedang menimbang…' : 'Status: menunggu keputusan Presiden'}</p>
       ${c.vetoed ? '<span class="absolute right-3 top-6 border-2 border-istana text-istana font-display text-xl px-2 -rotate-12">VETO</span>' : ''}</div>`; }).join('<div class="h-2"></div>');
   }
@@ -1294,7 +1486,7 @@ window.makeLocalPlay = function () {
       ${caseFiles(true)}
       ${rep ? `<div class="rounded-xl bg-kertas text-ink p-3 font-mono text-sm">🧑‍🏫 Kajian Ahli:<br>${Object.keys(rep).map((id) => `${nm(P(id))} → <b class="${rep[id] === 'GELAP' ? 'text-korup' : 'text-emerald-700'}">${rep[id] === 'GELAP' ? '🔴 FAKSI GELAP' : '🟢 REFORMIS'}</b>`).join('<br>')}</div>` : ''}
       <p class="text-sm text-center text-zinc-300 italic">“Apakah tuduhan ini sesuai?”</p>
-      ${oc.length ? `<div class="space-y-2">${oc.map((c) => `<button data-a="veto" data-v="${esc(c.id)}" class="relative w-full min-h-14 py-2 rounded-2xl font-display text-lg uppercase tracking-wide transition ${P0.vetoAvailable && !lock ? 'bg-istana text-ink pulse-gold' : 'bg-zinc-800 text-zinc-500'}" ${P0.vetoAvailable && !lock ? '' : 'disabled'}>✨ Veto ${esc(c.no)}<span class="block font-sans text-[10px] normal-case tracking-normal">${P0.vetoAvailable ? (c.kind === 'FITNAH' ? 'Batalkan kasus semalam • Skandal −1 • 1x per masa jabatan' : 'Batalkan OTT semalam • 1x per masa jabatan') : 'Veto telah digunakan periode ini'}</span></button>`).join('')}</div>` : `<div class="w-full h-12 rounded-2xl grid place-items-center bg-zinc-800 text-zinc-500 text-sm">✨ Hak Veto ${P0.vetoAvailable ? 'tersedia (tidak ada kasus)' : 'sudah dipakai'}</div>`}
+      ${oc.length ? `<div class="space-y-2">${oc.map((c) => `<button data-a="veto" data-v="${esc(c.id)}" class="relative w-full min-h-14 py-2 rounded-2xl font-display text-lg uppercase tracking-wide transition ${P0.vetoAvailable && !lock ? 'bg-istana text-ink pulse-gold' : 'bg-zinc-800 text-zinc-500'}" ${P0.vetoAvailable && !lock ? '' : 'disabled'}>✨ Veto ${esc(c.no)}<span class="block font-sans text-[10px] normal-case tracking-normal">${P0.vetoAvailable ? 'Batalkan kasus ini • 1x per masa jabatan' : 'Veto telah digunakan periode ini'}</span></button>`).join('')}</div>` : `<div class="w-full h-12 rounded-2xl grid place-items-center bg-zinc-800 text-zinc-500 text-sm">✨ Hak Veto ${P0.vetoAvailable ? 'tersedia (tidak ada kasus)' : 'sudah dipakai'}</div>`}
       <div class="space-y-2">
         ${oc.length ? oc.map((c) => `<button data-a="decide" data-v="JAIL" data-s="${esc(c.suspect)}" ${lock ? 'disabled' : ''} class="w-full text-left rounded-2xl p-4 ring-1 transition bg-korup-soft ring-korup/50 hover:bg-korup hover:text-white disabled:opacity-35 disabled:pointer-events-none"><span class="block font-display text-2xl uppercase">⛓ Jebloskan ${nm(P(c.suspect))}</span><span class="text-xs opacity-75">Tuduhan ${esc(c.no)} dinilai SAH</span></button>`).join('') : `<button disabled class="w-full text-left rounded-2xl p-4 ring-1 bg-korup-soft ring-korup/50 opacity-35"><span class="block font-display text-2xl uppercase">⛓ Jebloskan ke Penjara</span><span class="text-xs opacity-75">Tidak ada tersangka hari ini</span></button>`}
         <div class="rounded-2xl ring-1 ring-reform/50 bg-reform-soft"><button data-a="freeToggle" ${lock || !prisoners.length ? 'disabled' : ''} class="w-full text-left p-4 rounded-2xl hover:bg-reform hover:text-ink transition disabled:opacity-35 disabled:pointer-events-none"><span class="block font-display text-2xl uppercase">🔓 Bebaskan Napi ${prisoners.length ? '▾' : ''}</span><span class="text-xs opacity-75">${prisoners.length ? 'Napi yang dibebaskan kehilangan role-nya dan menjadi Warga Sipil biasa' : 'Rutan sedang kosong'}</span></button>
@@ -1368,6 +1560,9 @@ window.makeLocalPlay = function () {
       <div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Batal</button><button class="${btn('istana')}">Ajukan Banding</button></div></form></div>`;
     if (md && md.type === 'headline') h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><form data-form="headline" class="w-[min(92vw,460px)] rounded-2xl bg-ink-800 ring-1 ring-berita/50 p-6 rise"><p class="font-display text-3xl uppercase text-berita">📰 Hak Headline</p><p class="text-sm text-zinc-400">Tulisan Anda tayang di Breaking News pagi berikutnya sebagai “Kolom dari Balik Jeruji”. Maks. 90 karakter, sekali pakai.</p>
       <input id="headlineText" name="t" maxlength="90" autocomplete="off" class="mt-4 w-full h-12 rounded-xl bg-kertas text-ink font-mono text-base px-3 outline-none" placeholder="Yang menjebloskan saya…"><div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-a="modalClose" class="${btn('ghost')}">Nanti</button><button class="${btn('istana')}">Kirim ke Redaksi</button></div></form></div>`;
+    if (md && md.type === 'mute' && V && M) h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4"><div class="w-[min(92vw,400px)] rounded-2xl bg-ink-800 ring-1 ring-white/15 p-5 rise"><p class="font-display text-2xl uppercase">🔇 Bisukan Pemain</p><p class="text-sm text-zinc-400">Pesan dari pemain yang dibisukan tidak tampil di layar Anda. Hanya berlaku di HP Anda.</p>
+      <div class="mt-3 max-h-[50vh] overflow-y-auto divide-y divide-white/5">${V.players.filter((p) => !p.bot && p.id !== M.id).map((p) => `<button data-a="mute" data-v="${esc(p.id)}" class="w-full flex items-center gap-3 py-2.5 text-left"><span class="text-2xl">${persona(p.persona).e}</span><span class="flex-1">${nm(p)}</span><span class="text-xs rounded-full px-2 py-1 ${U.muted.has(p.id) ? 'bg-korup text-white' : 'bg-white/10'}">${U.muted.has(p.id) ? 'Dibisukan' : 'Bisukan'}</span></button>`).join('') || '<p class="py-3 text-sm text-zinc-500">Tidak ada pemain lain.</p>'}</div>
+      <button data-a="modalClose" class="${btn('ghost')} w-full mt-4">Tutup</button></div></div>`;
     if (md && md.type === 'peek' && M && M.role) h += `<div class="fixed inset-0 z-[75] grid place-items-center bg-ink/80 p-4" data-a="modalClose"><div class="w-[min(86vw,320px)] rise">${roleCardFront(M.role)}<div class="mt-3">${allyBox()}</div><p class="mt-3 text-xs text-zinc-500 text-center">Ketuk di mana saja untuk menutup</p></div></div>`;
     patch(document.getElementById('overlay'), h);
     bindHold();
@@ -1412,6 +1607,7 @@ window.makeLocalPlay = function () {
     let html;
     if (U.screen === 'LANDING') html = scrLanding();
     else if (U.screen === 'IDENTITY') html = scrIdentity();
+    else if (U.screen === 'ROOMS') html = scrRooms();
     else if (!V || !M) html = '<div class="min-h-screen grid place-items-center text-zinc-400">⏳ Memuat ruang sidang…</div>';
     else if (!M.role && V.phase !== 'LOBBY') html = '<div class="min-h-screen grid place-items-center text-zinc-400 p-6 text-center">⏳ Sidang sedang berjalan. Anda akan ikut di ronde berikutnya.</div>';
     else html = (SCREENS[V.phase] || scrLobby)();
@@ -1429,6 +1625,8 @@ window.makeLocalPlay = function () {
   }
   setInterval(() => {
     tickTimers();
+    if (V && V.lobby && V.lobby.cdAt) { const sec = Math.max(0, Math.ceil((V.lobby.cdAt - now()) / 1000)); document.querySelectorAll('[data-cd]').forEach((e) => { e.textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; e.classList.toggle('text-korup', sec <= 10); }); }
+    if (U.screen === 'ROOMS' && Date.now() - U.roomsAt > 5000) loadRooms();
     if (V && V.phase === 'NIGHT') { const idx = Math.floor(Date.now() / 6000); if (idx !== U.bannerIdx) { U.bannerIdx = idx; const b = document.querySelector('[data-banner]'); if (b) b.textContent = NIGHT_BANNERS[idx % NIGHT_BANNERS.length]; } }
   }, 250);
 
@@ -1445,13 +1643,18 @@ window.makeLocalPlay = function () {
   }
 
   // ------------------------------------------------------- ACTIONS
+  async function loadRooms() {
+    U.roomsAt = Date.now();
+    const r = await window.NET.listRooms(); if (U.screen !== 'ROOMS') return;
+    U.rooms = r === null ? false : r; render();
+  }
   async function enter() {
     const name = U.nick.trim(); if (!name || !U.persona) return;
     LS.set('mdu_nick', name); LS.set('mdu_persona', U.persona);
     U.busy = true; U.err = ''; render();
     try {
       const r = U.mode === 'local' ? await window.NET.local({ name, persona: U.persona })
-        : await window.NET.connect({ action: U.mode, code: U.joinCode.join(''), name, persona: U.persona });
+        : await window.NET.connect({ action: U.mode, code: U.joinCode.join(''), name, persona: U.persona, pub: U.pub });
       if (r && r.err) { U.err = r.err; U.busy = false; render(); return; }
       U.busy = false; U.screen = 'GAME'; render();
     } catch (e) { U.err = 'Gagal terhubung: ' + (e && e.message ? e.message : e); U.busy = false; render(); }
@@ -1465,6 +1668,16 @@ window.makeLocalPlay = function () {
     goCreate() { U.mode = 'create'; U.err = ''; U.screen = 'IDENTITY'; render(); },
     goJoin() { const code = U.joinCode.join(''); if (!/^\d{4}$/.test(code)) { U.err = 'Masukkan 4 digit kode room.'; render(); return; } U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
     goLocal() { U.mode = 'local'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goQuick() { U.mode = 'quick'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    goRooms() { U.err = ''; U.screen = 'ROOMS'; U.rooms = null; render(); loadRooms(); },
+    refreshRooms() { U.rooms = null; render(); loadRooms(); },
+    pickRoom(v) { U.joinCode = String(v).split(''); U.mode = 'join'; U.err = ''; U.screen = 'IDENTITY'; render(); },
+    setPub(v) { U.pub = v === '1'; LS.set('mdu_pub', U.pub ? '1' : '0'); render(); },
+    extend() { send({ t: 'extend' }); },
+    fillBots() { send({ t: 'fillBots' }); },
+    visibility() { send({ t: 'visibility', public: !V.settings.public }); },
+    mute(v) { if (U.muted.has(v)) U.muted.delete(v); else U.muted.add(v); render(); },
+    muteMenu() { U.modal = { type: 'mute' }; renderOverlay(); },
     back() { U.screen = 'LANDING'; U.err = ''; render(); },
     persona(v) { U.persona = v; render(); },
     enter,
@@ -1491,7 +1704,8 @@ window.makeLocalPlay = function () {
     wall() { U.wall = (U.wall + 1) % 30; render(); },
     nact(kind) { U.modal = null; send({ t: 'night', kind, target: U.sel.target }); },
     nskip() { send({ t: 'night', kind: 'DUMMY' }); },
-    korSubmit() { send({ t: 'night', kind: 'SCANDAL', target: U.sel.target, card: U.sel.card || (M.hand || [])[0] }); },
+    korSubmit() { send({ t: 'night', kind: 'SCANDAL', good: !!U.sel.good, target: U.sel.target, card: U.sel.good ? null : (U.sel.card || (M.hand || [])[0]) }); },
+    korGood(v) { U.sel.good = v === '1'; U.sel.target = null; render(); },
     korAgree() { send({ t: 'night', kind: 'AGREE' }); },
     pltSubmit() { send({ t: 'night', kind: 'SCANDAL', target: U.sel.pltTarget, card: U.sel.pltCard || (M.hand || [])[0] }).then((r) => { if (r && r.ok) toast('🐀 Kasus fiktif terdaftar. Sekarang jalankan aksi role Anda.', 'korup'); }); },
     mtab(v) { U.mobileTab = v; render(); },
@@ -1516,7 +1730,7 @@ window.makeLocalPlay = function () {
     appealPick(v) { U.prisonerPick = v; render(); },
     decide(kind, el) {
       let text = '', action = { t: 'decide', kind };
-      if (kind === 'JAIL') { const s = el.dataset.s; action.suspect = s; const c = openCases().find((x) => x.suspect === s); text = `Menjebloskan ${P(s).name} atas ${c && c.kind === 'KPK' ? 'penetapan OTT KPK' : c ? card(c.card).title : 'tuduhan'}.`; }
+      if (kind === 'JAIL') { const s = el.dataset.s; action.suspect = s; const c = openCases().find((x) => x.suspect === s); text = `Menjebloskan ${P(s).name} atas ${c ? card(c.card).title : 'tuduhan'}.`; }
       else if (kind === 'FREE') { action.prisoner = U.prisonerPick; text = `Membebaskan ${P(U.prisonerPick).name} dari Rutan Negara.`; }
       else text = 'Tidak mengambil tindakan. Tuduhan dikesampingkan.';
       U.modal = { type: 'keppres', action, text }; renderOverlay();
