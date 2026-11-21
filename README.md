@@ -10,6 +10,7 @@ Berjalan di **Cloudflare Workers + Durable Objects** (paket gratis):
 - Pemain putus di tengah game: bisa masuk lagi lewat link yang sama; kalau >2 menit, autopilot mengambil alih (label AFK) sampai ia kembali.
 - Room publik sepi 3 menit → pemegang palu ditawari mengisi kursi kosong dengan bot. Latihan offline melawan bot tetap ada.
 - Filter kata kasar di chat & nama, dan tombol bisukan pemain (hanya di HP sendiri).
+- **Papan Pemenang** di halaman depan: sidang online terakhir (nama + peran Presiden, faksi pemenang, berita Breaking satir). Tersimpan permanen di Durable Object `Directory` (20 terakhir). Hanya sidang publik dengan minimal 4 pemain manusia yang dicatat, jadi latihan melawan bot tidak masuk. Selama sidang asli belum mencapai 4, sisa barisnya diisi **sidang latihan melawan bot** yang ditandai 🤖 (data sementara di `HALL_SEED` pada `src/worker.js`; kosongkan array itu untuk mematikannya). Entri bot tidak ikut menghitung tren dan otomatis tersisih begitu ada 4 sidang asli. Bila 5+ sidang terakhir banyak dimenangkan Gelap/Reformis, muncul ajakan sesuai tren (tanpa angka statistik).
 
 > **Update dari versi sebelumnya:** ganti `src/worker.js`, `src/engine.js`, `public/index.html`, **dan `wrangler.jsonc`** (ada Durable Object baru `Directory` dengan migrasi `v2`). Tanpa `wrangler.jsonc` baru, daftar room selalu kosong tapi game tetap jalan.
 

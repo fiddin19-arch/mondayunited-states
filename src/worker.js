@@ -23,6 +23,10 @@ export default {
       let pub = true; try { const b = await request.json(); pub = b && b.public !== false; } catch (e) {}
       return createRoom(env, pub);
     }
+    if (url.pathname === '/api/hall' && request.method === 'GET') {
+      if (!env.DIR) return json({ last: [], trend: null });
+      return dirStub(env).fetch('https://dir/hall');
+    }
     if (url.pathname === '/api/rooms' && request.method === 'GET') {
       if (!env.DIR) return json({ rooms: [] });
       return dirStub(env).fetch('https://dir/list');
@@ -71,10 +75,40 @@ const dirStub = (env) => env.DIR.get(env.DIR.idFromName('main'));
 /* Daftar room publik. Hanya di memori: setiap room aktif melapor ulang tiap 20 detik,
  * jadi kalau Directory sempat tertidur, daftarnya pulih sendiri. */
 const DIR_TTL_MS = 50000;
+// ---- SEED SEMENTARA (data sidang latihan melawan bot; ditandai bot:true). Matikan dengan HALL_SEED = [] ----
+const HALL_SEED = [{"id": "bot-0", "bot": true, "winner": "REFORMIS", "how": "SINDIKAT", "day": 3, "pres": {"name": "Ani", "role": "WARGA", "roleTitle": "Warga Sipil", "icon": "🧍", "persona": "rt"}, "headline": "BREAKING: Reformis menang! Ani resmi dijuluki \"Presiden Anti-Masuk Angin\"."}, {"id": "bot-1", "bot": true, "winner": "GELAP", "how": "REFORMIS_PENJARA", "day": 7, "pres": {"name": "Joko", "role": "KORUPTOR", "roleTitle": "Koruptor", "icon": "🐀", "persona": "mhs"}, "headline": "BREAKING: Tak ada lagi yang protes. Joko sebut stabilitas nasional terjaga."}, {"id": "bot-3", "bot": true, "winner": "GELAP", "how": "TIGA_PERIODE", "day": 10, "pres": {"name": "Tono", "role": "KORUPTOR", "roleTitle": "Koruptor", "icon": "🐀", "persona": "dukun"}, "headline": "BREAKING: Tono kembali berkuasa. Pengamat: \"Kami sudah memperingatkan, setelah kejadian.\""}, {"id": "bot-4", "bot": true, "winner": "GELAP", "how": "REFORMIS_PENJARA", "day": 5, "pres": {"name": "Joko", "role": "BUZZER", "roleTitle": "Buzzer", "icon": "📣", "persona": "mhs"}, "headline": "BREAKING: Semua Reformis di balik jeruji. Joko tetap tenang: \"Murni penegakan hukum.\""}, {"id": "bot-5", "bot": true, "winner": "GELAP", "how": "REFORMIS_PENJARA", "day": 13, "pres": {"name": "Ani", "role": "KORUPTOR", "roleTitle": "Koruptor", "icon": "🐀", "persona": "rt"}, "headline": "BREAKING: Semua Reformis di balik jeruji. Ani tetap tenang: \"Murni penegakan hukum.\""}];
+// ---- /SEED ----
+const HALL_KEEP = 20, HALL_MIN_HUMANS = 4, TREND_WINDOW = 10, TREND_MIN = 5, TREND_FRAC = 0.6;
 export class Directory {
-  constructor(state, env) { this.rooms = new Map(); }
+  constructor(state, env) {
+    this.rooms = new Map(); this.state = state; this.hall = [];
+    // Papan Pemenang disimpan permanen; daftar room cukup di memori.
+    if (state && state.storage && state.blockConcurrencyWhile) state.blockConcurrencyWhile(async () => { this.hall = (await state.storage.get('hall')) || []; });
+  }
+  trend() {
+    const w = this.hall.slice(0, TREND_WINDOW); if (w.length < TREND_MIN) return null;
+    const g = w.filter((x) => x.winner === 'GELAP').length / w.length;
+    return g >= TREND_FRAC ? 'GELAP' : 1 - g >= TREND_FRAC ? 'REFORMIS' : 'SEIMBANG';
+  }
   async fetch(request) {
     const url = new URL(request.url), now = Date.now();
+    if (url.pathname === '/result' && request.method === 'POST') {
+      let e; try { e = await request.json(); } catch (x) { return new Response('bad', { status: 400 }); }
+      if (!e || typeof e.id !== 'string' || !['GELAP', 'REFORMIS'].includes(e.winner) || typeof e.headline !== 'string') return new Response('bad', { status: 400 });
+      // Hanya sidang online yang ramai (bukan latihan sendirian) dan tidak dicatat dua kali.
+      if (!e.pub || (e.humans | 0) < HALL_MIN_HUMANS || this.hall.some((x) => x.id === e.id)) return new Response('skip');
+      const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+      const pr = e.pres ? { name: clip(e.pres.name, 20), role: clip(e.pres.role, 12), roleTitle: clip(e.pres.roleTitle, 24), icon: clip(e.pres.icon, 8), persona: clip(e.pres.persona, 16) } : null;
+      this.hall.unshift({ id: clip(e.id, 40), winner: e.winner, how: clip(e.how, 20), day: e.day | 0, at: now, pres: pr, headline: clip(e.headline, 200) });
+      this.hall.length = Math.min(this.hall.length, HALL_KEEP);
+      if (this.state && this.state.storage) await this.state.storage.put('hall', this.hall);
+      return new Response('ok');
+    }
+    if (url.pathname === '/hall') {
+      // Selama sidang asli belum cukup, isi sisa baris dengan sidang latihan bot (selalu berlabel bot:true; tidak ikut tren).
+      const real = this.hall.slice(0, 4);
+      return json({ last: real.concat(HALL_SEED.slice(0, 4 - real.length)), trend: this.trend() });
+    }
     if (url.pathname === '/report' && request.method === 'POST') {
       let r; try { r = await request.json(); } catch (e) { return new Response('bad', { status: 400 }); }
       if (!r || !/^\d{4}$/.test(String(r.code))) return new Response('bad', { status: 400 });
@@ -197,9 +231,16 @@ export class Room {
   }
   startTicking() {
     if (this.timer) return;
-    this.timer = setInterval(() => { if (this.G && Engine.tick(this.G, Date.now())) this.push(); else this.report(); }, 200);
+    this.timer = setInterval(() => { if (this.G && Engine.tick(this.G, Date.now())) this.push(); else this.report(); this.reportResult(); }, 200);
   }
   stopTicking() { if (this.timer) { clearInterval(this.timer); this.timer = null; } this.report(true); }
+
+  // Sidang selesai → catat sekali ke Papan Pemenang (Directory menolak duplikat).
+  reportResult() {
+    const G = this.G; if (!G || G.phase !== 'END' || !G.gameId || this.hallSent === G.gameId || !this.env || !this.env.DIR) return;
+    const e = Engine.hallEntry(G, Date.now()); if (!e) return; this.hallSent = G.gameId;
+    try { this.env.DIR.get(this.env.DIR.idFromName('main')).fetch('https://dir/result', { method: 'POST', body: JSON.stringify(e), headers: { 'content-type': 'application/json' } }).catch(() => { this.hallSent = null; }); } catch (x) { this.hallSent = null; }
+  }
 
   // Lapor ke Directory saat ringkasan berubah, atau tiap 20 detik sebagai detak.
   report(gone) {

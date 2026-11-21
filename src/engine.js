@@ -176,7 +176,7 @@
     const pool = []; DIST_KEYS.forEach((k, i) => { for (let j = 0; j < dc.d[i]; j++) pool.push(k); }); for (let j = 0; j < dc.warga; j++) pool.push('WARGA');
     shuffle(pool).forEach((r, i) => Object.assign(G.players[i], { role: r, jailed: false, jailedDay: 0, suspect: false, impeached: false, appealUsed: false, headlineRight: false, recruited: false, ready: false, letterDay: 0, exNapi: false, impeachCount: 0, banUntil: 0 }));
     Object.assign(G, { sadapNight: {}, lastBadDay: -9, grasiUsed: false, day: 0, scandal: 0, presidentId: null, term: { n: 0, round: 1 }, darkTerms: 0, vetoAvailable: true, cases: [], sigs: {}, skip: {}, flipTarget: null, lastProtected: {}, recruitUsed: false, deck: [], hand: [], korChoice: null, nightActs: {}, investigations: {}, observations: {}, pendingColumn: null, expertUsed: false, expertReport: null, election: null, dark: [], appeals: [], notes: {}, news: null, fx: null, history: [], stats: {}, decided: false, carryover: false, pendingDecision: false, winner: null, reason: '', pending: null });
-    G.lobby = Object.assign(G.lobby || {}, { cdAt: 0 });
+    G.lobby = Object.assign(G.lobby || {}, { cdAt: 0 }); G.gameId = G.code + '-' + now; G.how = '';
     G.chat = []; sys(G, '🏛️ Sidang dimulai. Buka amplop rahasia Anda.');
     setPhase(G, 'REVEAL', FIXED_T.reveal, now);
     return { ok: true };
@@ -229,7 +229,7 @@
   // ----------------------------------------------------------------- NIGHT
   function dealHand(G) { if (G.deck.length < 5) G.deck = shuffle(CARDS.map((c) => c.id)); return G.deck.slice(0, 5); }
   function startNight(G, now) {
-    if (G.day >= R(G, 'maxDays')) { G.winner = 'GELAP'; G.reason = `Hari ke-${R(G, 'maxDays')} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
+    if (G.day >= R(G, 'maxDays')) { G.winner = 'GELAP'; G.how = 'KADALUWARSA'; G.reason = `Hari ke-${R(G, 'maxDays')} lewat tanpa vonis tuntas. Kasus kedaluwarsa, status quo abadi.`; G.pending = null; setPhase(G, 'END', 0, now); return; }
     G.day++; G.cases = [];
     appointPltKpk(G); G.players.forEach((p) => (p.suspect = false)); G.expertReport = null;
     G.hand = dealHand(G); G.korChoice = null; G.nightActs = {}; G.decided = false; G.appeals = [];
@@ -475,12 +475,12 @@
     else startNight(G, now);
   }
   function checkWin(G, now) {
-    let w = null, r = '';
-    if (G.players.filter(isDark).every((p) => p.jailed)) { w = 'REFORMIS'; r = 'Seluruh sindikat mendekam di Rutan Negara. Untuk sementara.'; }
-    else if (G.players.filter((p) => !isDark(p)).every((p) => p.jailed)) { w = 'GELAP'; r = 'Semua Reformis sudah dipenjara. Yang tersisa di luar hanya yang “bisa diatur”.'; }
-    else if (G.darkTerms >= R(G, 'darkTerms')) { w = 'GELAP'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
+    let w = null, r = '', how = '';
+    if (G.players.filter(isDark).every((p) => p.jailed)) { w = 'REFORMIS'; how = 'SINDIKAT'; r = 'Seluruh sindikat mendekam di Rutan Negara. Untuk sementara.'; }
+    else if (G.players.filter((p) => !isDark(p)).every((p) => p.jailed)) { w = 'GELAP'; how = 'REFORMIS_PENJARA'; r = 'Semua Reformis sudah dipenjara. Yang tersisa di luar hanya yang “bisa diatur”.'; }
+    else if (G.darkTerms >= R(G, 'darkTerms')) { w = 'GELAP'; how = 'TIGA_PERIODE'; r = 'Koruptor terpilih Presiden untuk ketiga kalinya. Demokrasi bekerja, sayangnya.'; }
     if (!w) return false;
-    G.winner = w; G.reason = r; G.pending = null; setPhase(G, 'END', 0, now); return true;
+    G.winner = w; G.how = how; G.reason = r; G.pending = null; setPhase(G, 'END', 0, now); return true;
   }
 
   // --------------------------------------------------------------- ACTIONS
@@ -539,7 +539,7 @@
         if (ph !== 'END' || !isCreator) return { err: 'Hanya pembuat room.' };
         G.players = G.players.filter((p) => p.bot || p.connected);
         G.players.forEach((p) => Object.assign(p, { auto: false, role: null, jailed: false, suspect: false, impeached: false, impeachCount: 0, banUntil: 0, recruited: false, headlineRight: false, ready: false, exNapi: false }));
-        Object.assign(G, { winner: null, reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
+        Object.assign(G, { winner: null, how: '', reason: '', presidentId: null, cases: [], scandal: 0, pending: null, fx: null, news: null });
         G.lobby = { cdAt: 0, ext: 0, openedAt: now };
         G.chat = []; sys(G, '🔁 Ruang sidang dibuka lagi. Ronde baru!'); setPhase(G, 'LOBBY', 0, now); return { ok: true };
       }
@@ -836,6 +836,39 @@
     return v;
   }
 
+  // ---------------------------------------------- PAPAN PEMENANG & BERITA BREAKING
+  const BREAKING = {
+    SINDIKAT: [
+      (n) => `BREAKING: Presiden ${n} jebloskan seluruh sindikat. Rutan penuh, konferensi pers menyusul.`,
+      (n) => `BREAKING: Reformis menang! ${n} resmi dijuluki "Presiden Anti-Masuk Angin".`,
+      (n) => `BREAKING: Sindikat mendekam di Rutan Negara. ${n}: "Ini baru permulaan, bukan akhir."`,
+    ],
+    REFORMIS_PENJARA: [
+      (n) => `BREAKING: Semua Reformis di balik jeruji. ${n} tetap tenang: "Murni penegakan hukum."`,
+      (n) => `BREAKING: Tak ada lagi yang protes. ${n} sebut stabilitas nasional terjaga.`,
+      (n) => `BREAKING: Sidang sepi, kritik hilang. Presiden ${n} klaim kepuasan publik 100 persen.`,
+    ],
+    TIGA_PERIODE: [
+      (n) => `BREAKING: Koruptor ${n} jadi Presiden tiga periode: "Ini kehendak rakyat, kami hanya menjalankan."`,
+      (n) => `BREAKING: Demokrasi bekerja! ${n} terpilih lagi, tim sukses bungkam soal sumber dana.`,
+      (n) => `BREAKING: ${n} kembali berkuasa. Pengamat: "Kami sudah memperingatkan, setelah kejadian."`,
+    ],
+    KADALUWARSA: [
+      (n) => `BREAKING: Kasus kedaluwarsa. Presiden ${n} umumkan: "Kita lanjutkan tahun depan."`,
+      (n) => `BREAKING: Waktu habis, vonis menguap. ${n} tersenyum di depan kamera.`,
+      (n) => `BREAKING: Status quo abadi. ${n}: "Yang penting rakyat tetap tenang."`,
+    ],
+  };
+  // Catatan satu sidang yang selesai untuk Papan Pemenang. Hanya data yang memang terbuka di layar akhir.
+  function hallEntry(G, now) {
+    if (G.phase !== 'END' || !G.winner || !G.gameId) return null;
+    const pr = pres(G), n = pr ? pr.name : 'Tanpa Presiden', set = BREAKING[G.how] || BREAKING[G.winner === 'REFORMIS' ? 'SINDIKAT' : 'TIGA_PERIODE'];
+    let h = 0; for (const c of G.gameId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const role = pr && pr.role ? pr.role : null;
+    return { id: G.gameId, winner: G.winner, how: G.how || '', day: G.day, at: now || Date.now(),
+      pres: pr ? { name: pr.name, role, roleTitle: role ? ROLES[role].title : '', icon: role ? ROLES[role].icon : '', persona: pr.persona || null, bot: !!pr.bot } : null,
+      humans: G.players.filter((p) => !p.bot).length, pub: !!G.settings.public, headline: set[h % set.length](n) };
+  }
   // Ringkasan untuk daftar room publik (tanpa rahasia)
   function summary(G, now) {
     const h = P(G, G.creatorId);
@@ -843,7 +876,7 @@
       host: h ? h.name : '', cdAt: G.lobby ? G.lobby.cdAt : 0, at: now || Date.now() };
   }
   const Engine = {
-    MAX_DAYS, summary, filt,
+    MAX_DAYS, summary, filt, hallEntry,
     create, join, act, tick, setConnected, publicView, privateView, distCounts,
     DATA: { PERSONAS, ROLES, WIN_TEXT, DIST, DIST_KEYS, NINE_PLUS, CARDS, DARK_ROLES, MIN_PLAYERS, MAX_PLAYERS },
   };
